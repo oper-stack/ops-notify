@@ -24,6 +24,7 @@ const OWN_ADDRESSES = ['billing@oper-stack.com', 'accounts@oper-stack.com', 'sup
 const PLATFORMS = [
   ['paddle.com', 'Paddle', '💳'], ['lemonsqueezy.com', 'Lemon Squeezy', '💳'], ['whop.com', 'Whop', '💳'], ['gumroad.com', 'Gumroad', '💳'],
   ['stripe.com', 'Stripe', '💳'], ['paypal.com', 'PayPal', '💳'], ['payoneer.com', 'Payoneer', '🏦'],
+  ['dodopayments.com', 'Dodo Payments', '💳'], ['polar.sh', 'Polar', '💳'], ['creem.io', 'Creem', '💳'],
   ['upwork.com', 'Upwork', '🧑‍💻'], ['fiverr.com', 'Fiverr', '🧑‍💻'],
   ['producthunt.com', 'Product Hunt', '🚀'], ['apify.com', 'Apify', '🤖'], ['npmjs.com', 'npm', '📦'], ['github.com', 'GitHub', '🐙'],
   ['udemy.com', 'Udemy', '🎓'], ['etsy.com', 'Etsy', '🛍'], ['notion.so', 'Notion', '📓'], ['poe.com', 'Poe', '🤖'],
