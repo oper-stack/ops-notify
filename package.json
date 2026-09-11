@@ -1,0 +1,17 @@
+{
+  "name": "operstack-ops-notify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sales inbox and daily digest to Telegram for OperStack",
+  "scripts": {
+    "mail": "node notify-mail.mjs",
+    "mail:dry": "node notify-mail.mjs --dry-run",
+    "digest": "node digest.mjs",
+    "digest:dry": "node digest.mjs --dry-run"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "imapflow": "^1.0.190"
+  }
+}

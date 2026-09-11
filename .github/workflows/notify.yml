@@ -1,0 +1,44 @@
+name: ops-notify
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # sales inbox to Telegram, every ten minutes (GitHub may delay a few minutes)
+    - cron: '0 12 * * *'     # daily digest at 12:00 UTC, 09:00 Argentina
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'mail or digest'
+        default: 'mail'
+
+jobs:
+  mail:
+    if: github.event.schedule == '*/10 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'mail')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - run: node notify-mail.mjs
+        env:
+          GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
+          GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+
+  digest:
+    if: github.event.schedule == '0 12 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'digest')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node digest.mjs
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
