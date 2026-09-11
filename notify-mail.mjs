@@ -61,21 +61,27 @@ async function main() {
     const boxes = await client.list();
     if (!boxes.some((b) => b.path === LABEL)) { if (!dry) await client.mailboxCreate(LABEL); }
     const lock = await client.getMailboxLock('INBOX');
-    let posted = 0, seen = 0;
+    let posted = 0, seen = 0, matched = [];
     try {
+      // Collect first, act after: issuing another IMAP command while a fetch stream is open deadlocks.
       const uids = await client.search({ gmailRaw: `in:inbox newer_than:${LOOKBACK_DAYS}d -label:${LABEL}` }, { uid: true });
-      for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true }, { uid: true })) {
-        seen++;
-        const { from, to, subject } = msg.envelope;
-        const c = classify(from, to, subject || '');
-        if (!c) continue;
-        const when = new Date(msg.internalDate).toLocaleString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false });
-        const sender = from?.[0]?.name ? `${from[0].name} <${from[0].address}>` : from?.[0]?.address || 'unknown';
-        if (!bootstrap) { await telegram(`${c.icon} ${c.label}${c.hot ? ' · action' : ''}: ${subject || '(no subject)'}\nfrom ${sender}\n${when} (AR)`); posted++; }
-        if (!dry) await client.messageCopy(`${msg.uid}`, LABEL, { uid: true });
+      if (uids && uids.length) {
+        for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true }, { uid: true })) {
+          seen++;
+          const { from, to, subject } = msg.envelope;
+          const c = classify(from, to, subject || '');
+          if (!c) continue;
+          matched.push({ uid: msg.uid, c, subject: subject || '(no subject)', internalDate: msg.internalDate, from });
+        }
       }
+      for (const m of matched) {
+        const when = new Date(m.internalDate).toLocaleString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false });
+        const sender = m.from?.[0]?.name ? `${m.from[0].name} <${m.from[0].address}>` : m.from?.[0]?.address || 'unknown';
+        if (!bootstrap) { await telegram(`${m.c.icon} ${m.c.label}${m.c.hot ? ' · action' : ''}: ${m.subject}\nfrom ${sender}\n${when} (AR)`); posted++; }
+      }
+      if (!dry && matched.length) await client.messageCopy(matched.map((m) => m.uid), LABEL, { uid: true });
     } finally { lock.release(); }
-    console.log(`checked ${seen} message(s), posted ${posted}${dry ? ' (dry run)' : ''}${bootstrap ? ' (bootstrap: labelled only)' : ''}`);
+    console.log(`checked ${seen} message(s), matched ${matched.length}, posted ${posted}${dry ? ' (dry run)' : ''}${bootstrap ? ' (bootstrap: labelled only)' : ''}`);
   } finally { await client.logout(); }
 }
 main().catch((e) => { console.error(e.message); process.exit(1); });

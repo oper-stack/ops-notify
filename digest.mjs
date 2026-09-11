@@ -17,8 +17,12 @@ async function json(url, headers = {}) { const r = await fetch(url, { headers })
 async function main() {
   const lines = ['📊 OperStack daily digest'];
   for (const p of PACKAGES) {
-    try { const d = await json(`https://api.npmjs.org/downloads/point/last-day/${p}`); const w = await json(`https://api.npmjs.org/downloads/point/last-week/${p}`); lines.push(`📦 ${p}: ${d.downloads} yesterday, ${w.downloads} this week`); }
-    catch (e) { lines.push(`📦 ${p}: npm stats unavailable (${e.message.slice(0, 60)})`); }
+    // The downloads API answers 404 until a package has its first recorded download; that is a zero, not an error.
+    try {
+      const d = await json(`https://api.npmjs.org/downloads/point/last-day/${p}`).catch(() => ({ downloads: 0 }));
+      const w = await json(`https://api.npmjs.org/downloads/point/last-week/${p}`).catch(() => ({ downloads: 0 }));
+      lines.push(`📦 ${p}: ${d.downloads} yesterday, ${w.downloads} this week`);
+    } catch (e) { lines.push(`📦 ${p}: npm stats unavailable (${e.message.slice(0, 60)})`); }
   }
   const gh = env('GH_TOKEN') ? { Authorization: `Bearer ${env('GH_TOKEN')}` } : {};
   for (const r of REPOS) {
