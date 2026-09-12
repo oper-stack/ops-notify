@@ -112,7 +112,7 @@ async function main() {
     if (!queue.length && !TIDY) { console.log(`очередь пуста (искали в ${allMail})`); return; }
     if (queue.length) console.log(`в очереди: ${queue.length}`);
 
-    let done = 0; let failed = 0;
+    let done = 0; let failed = 0; let refused = 0;
     for (const item of TIDY ? [] : queue.slice(0, MAX_PER_RUN)) {
       const job = parseJob(item.body);
       if (!job) { console.log(`  пропуск uid ${item.uid}: подписи в письме нет`); continue; }
@@ -123,7 +123,9 @@ async function main() {
           await telegram(`⚠️ Заявка на отчёт отклонена: ${job.bad}. Письмо в ящике, uid ${item.uid}.`);
           await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
         }
-        failed++; continue;
+        // Отклонённая подделка это система, которая сработала, а не поломка. Красный прогон на
+        // каждое чужое письмо приучил бы не смотреть на красное вообще.
+        refused++; continue;
       }
       console.log(`  ${job.tier} USD · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
       if (LIST || DRY) continue;
@@ -152,7 +154,7 @@ async function main() {
     } catch (e) { console.error(`не удалось убрать из входящих: ${e.message}`); }
 
     if (queue.length > MAX_PER_RUN) console.log(`осталось на следующий прогон: ${queue.length - MAX_PER_RUN}`);
-    console.log(`готово: отправлено ${done}, ошибок ${failed}`);
+    console.log(`готово: отправлено ${done}, отклонено ${refused}, ошибок ${failed}`);
     if (failed) process.exitCode = 1;
   } finally {
     await client.logout().catch(() => {});
