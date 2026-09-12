@@ -4,10 +4,11 @@ on:
   schedule:
     - cron: '*/10 * * * *'   # sales inbox to Telegram, every ten minutes (GitHub may delay a few minutes)
     - cron: '0 12 * * *'     # daily digest at 12:00 UTC, 09:00 Argentina
+    - cron: '0 6 * * *'      # продукты: прогон того, что продаём, на своём сайте, 06:00 UTC
   workflow_dispatch:
     inputs:
       job:
-        description: 'mail or digest'
+        description: 'mail, digest or smoke'
         default: 'mail'
 
 jobs:
@@ -42,3 +43,20 @@ jobs:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke:
+    # Проверяем свои же продукты на своём сайте. Телеметрии из чужих прогонов у нас нет и не будет:
+    # актор публичный, и слать нам адреса чужих сайтов это не мониторинг, а сбор чужих данных.
+    if: github.event.schedule == '0 6 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'smoke')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node product-smoke.mjs
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

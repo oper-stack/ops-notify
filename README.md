@@ -22,3 +22,19 @@ Register the platform with billing@oper-stack.com. If its mail comes from a doma
 ## Later: the dashboard
 
 When there are enough events, the same script can append each note to a Notion database (one row per event: platform, type, amount, link) and the dashboard is a Notion view. Until then the Telegram chat is the dashboard, and the daily digest is the report.
+
+## Проверка своих продуктов
+
+Раз в сутки, в 06:00 UTC, мы прогоняем то, что продаём, на своём же сайте: ставим свежий
+`@operstack/audit` с npm и собираем аудит oper-stack.com, запускаем актор проверки видимости в
+Apify и ждём настоящего результата, открываем обе страницы оплаты в Whop и смотрим, видны ли товар,
+цена и кнопка. Если что-то сломалось, приходит сообщение в Telegram. Если всё работает, не приходит
+ничего: ежедневное «всё хорошо» перестают читать на третий день.
+
+Телеметрии из чужих прогонов у нас нет и не будет. Актор публичный, его запускают посторонние люди
+на своих сайтах, и слать нам их адреса значило бы собирать чужие данные под видом мониторинга.
+Поэтому мы проверяем себя на себе.
+
+```
+APIFY_TOKEN=... TG_TOKEN=... TG_CHAT_ID=... node product-smoke.mjs --dry-run
+```
