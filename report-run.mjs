@@ -185,6 +185,16 @@ async function main() {
     // иначе в PDF уедет пустой шаблон с фигурными скобками вместо текста.
     const audit = draftNarrative(raw, { lang: LANG });
 
+    // Сайт, который не ответил, мерить нечем. Отдать за это отчёт значило бы взять деньги за
+    // страницу выдуманных находок: чаще всего человек просто опечатался в адресе.
+    if (raw.meta?.reachable === false) {
+      throw new Error(`сайт ${site} не ответил: отчёта по нему быть не может, проверьте адрес`);
+    }
+    const readable = (raw.sample || []).filter((p) => p.title !== undefined).length;
+    if (!readable) {
+      throw new Error(`с ${site} не удалось прочитать ни одной страницы: отчёт был бы пустым`);
+    }
+
     const left = stillEmpty(audit);
     if (left.length) throw new Error(`черновик не заполнил ${left.length} полей (${left.slice(0, 5).join(', ')}): отчёт с заготовками покупателю не отдаём`);
 
