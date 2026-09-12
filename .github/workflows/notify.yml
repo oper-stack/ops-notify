@@ -5,10 +5,11 @@ on:
     - cron: '*/10 * * * *'   # sales inbox to Telegram, every ten minutes (GitHub may delay a few minutes)
     - cron: '0 12 * * *'     # daily digest at 12:00 UTC, 09:00 Argentina
     - cron: '0 6 * * *'      # продукты: прогон того, что продаём, на своём сайте, 06:00 UTC
+    - cron: '5,20,35,50 * * * *'  # очередь отчётов за 9: заявки покупателей, каждые 15 минут
   workflow_dispatch:
     inputs:
       job:
-        description: 'mail, digest or smoke'
+        description: 'mail, digest, smoke or report'
         default: 'mail'
 
 jobs:
@@ -58,5 +59,29 @@ jobs:
       - run: node product-smoke.mjs
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+
+  report:
+    # Очередь отчётов за 9 долларов. Заявка приходит служебным письмом с oper-stack.com, здесь она
+    # выполняется и покупателю уходит PDF. Chrome на ubuntu-latest уже стоит: он и печатает отчёт,
+    # и меряет, сколько текста пропадает без скриптов.
+    if: github.event.schedule == '5,20,35,50 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: operstack-report-queue
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - run: node report-watch.mjs
+        env:
+          GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
+          GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
+          KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

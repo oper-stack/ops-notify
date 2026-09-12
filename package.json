@@ -10,8 +10,12 @@
     "digest": "node digest.mjs",
     "digest:dry": "node digest.mjs --dry-run"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "imapflow": "^1.0.190"
+    "@operstack/audit": "^0.13.0",
+    "imapflow": "^1.0.190",
+    "nodemailer": "^10.0.8"
   }
 }
