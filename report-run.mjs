@@ -12,6 +12,7 @@
  * Ничего не сохраняется: адрес сайта покупателя нам не нужен после того, как письмо ушло.
  *
  *   node report-run.mjs --url=https://example.com --email=buyer@example.com --lang=en
+ *   node report-run.mjs --url=... --email=... --rivals=a.com,b.com,c.com   ступень за 29
  *   node report-run.mjs --url=... --email=... --dry-run   прогнать и не слать письмо
  *
  * Env: GOOGLE_USER, GOOGLE_APP_PASSWORD (SMTP), TG_TOKEN, TG_CHAT_ID (необязательно).
@@ -19,7 +20,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { collect, draftNarrative, render, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, draftNarrative, render, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 
 const args = process.argv.slice(2);
@@ -27,6 +28,11 @@ const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).sli
 const has = (f) => args.includes(f);
 
 const URL_IN = val('--url=');
+/** До трёх конкурентов для ступени за 29: их меряем короче, чем свой сайт. */
+const RIVALS = val('--rivals=').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3);
+const RIVAL_PAGES = Number(val('--rival-pages=', '8')) || 8;
+/** Столько времени даём одному конкуренту. Дальше он в сравнение просто не попадает. */
+const RIVAL_BUDGET_MS = Number(val('--rival-budget=', '180')) * 1000;
 const EMAIL = val('--email=');
 const LANG = val('--lang=', 'en') === 'ru' ? 'ru' : 'en';
 const PAGES = Number(val('--pages=', '20')) || 20;
@@ -63,6 +69,51 @@ async function notifyTelegram(text) {
   } catch (e) { console.error('telegram:', e.message); }
 }
 
+/** Ключевые бинарные факты, которые в сравнении читаются лучше оценок. */
+const FACTS = [
+  ['llms', { en: 'Map for agents (llms.txt)', ru: 'Карта для агентов (llms.txt)' }],
+  ['ai-search-access', { en: 'AI crawlers allowed in', ru: 'Роботы ИИ пущены на сайт' }],
+  ['agent-card', { en: 'Agent card', ru: 'Карточка агента' }],
+  ['faq-schema', { en: 'FAQ markup', ru: 'Разметка вопросов' }],
+  ['answer-first', { en: 'Answer in the first paragraph', ru: 'Ответ в первом абзаце' }],
+  ['thin', { en: 'Thin pages', ru: 'Тонкие страницы' }],
+];
+
+const mark = (status) => (status === 'ok' ? '+' : status === 'warn' ? '~' : status === 'bad' ? '—' : '?');
+
+/**
+ * Сравнение: вы и ваши конкуренты в одной таблице.
+ *
+ * Простым языком: знать, что у вас плохо, полезно наполовину. Полезнее знать, хуже ли вы тех
+ * конкретных, с кем вас сравнивает покупатель. Плюс значит проверка пройдена, тильда спорно,
+ * тире провалено, вопрос не измеряли.
+ */
+function buildComparison(mine, rivals, lang) {
+  const ru = lang === 'ru';
+  const all = [{ host: mine.meta.host, audit: mine, you: true }, ...rivals.map((r) => ({ host: r.meta.host, audit: r, you: false }))];
+  const areas = Object.keys(mine.scores || {});
+  const head = ['', ...all.map((x) => (x.you ? `${x.host} ${ru ? '(вы)' : '(you)'}` : x.host))];
+  const rows = [];
+  for (const area of areas) {
+    rows.push([ru ? (AREAS_RU[area] || area) : area, ...all.map((x) => {
+      const v = x.audit.scores?.[area];
+      return typeof v === 'number' ? `${v}/10` : (ru ? 'не мерили' : 'not measured');
+    })]);
+  }
+  for (const [id, label] of FACTS) {
+    rows.push([ru ? label.ru : label.en, ...all.map((x) => mark((x.audit.checks || []).find((c) => c.id === id)?.status))]);
+  }
+  const width = head.map((_, i) => Math.max(...[head, ...rows].map((r) => String(r[i] ?? '').length)));
+  const line = (r) => r.map((cell, i) => String(cell ?? '').padEnd(width[i])).join('  ').trimEnd();
+  const text = [line(head), width.map((w) => '-'.repeat(w)).join('  '), ...rows.map(line)].join('\n');
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const html = ['<table style="border-collapse:collapse;font:14px ui-sans-serif,system-ui,sans-serif">',
+    `<tr>${head.map((h, i) => `<th style="text-align:${i ? 'center' : 'left'};padding:6px 12px;border-bottom:2px solid #ddd">${esc(h)}</th>`).join('')}</tr>`,
+    ...rows.map((r) => `<tr>${r.map((c, i) => `<td style="text-align:${i ? 'center' : 'left'};padding:6px 12px;border-bottom:1px solid #eee">${esc(c)}</td>`).join('')}</tr>`),
+    '</table>'].join('\n');
+  return { text, html };
+}
+
 const COPY = {
   en: {
     subject: (host) => `Your OperStack report: ${host}`,
@@ -71,6 +122,8 @@ const COPY = {
       'It is measured, not written by a person: every number in it comes from your live pages, and where something could not be measured the report says so and why.',
     nextStep:
       'If you want a person to read every finding and write what it means for your business, that is the 149 USD audit at https://oper-stack.com/products/seo-audit/. If you want the work done, Fix at 249 USD closes the checks that need no subject knowledge of your market.',
+    rivalsHead: 'You and your rivals',
+    rivalsNote: 'Plus means the check passes, tilde means it needs attention, a dash means it fails, a question mark means it was not measured. The JavaScript measurement is run on your site only: it needs a real browser and would triple the time on four sites.',
     sign: 'OperStack · info@oper-stack.com',
   },
   ru: {
@@ -80,19 +133,24 @@ const COPY = {
       'Он измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не удалось, так и написано и сказано почему.',
     nextStep:
       'Если нужно, чтобы каждую находку прочитал человек и написал, что она значит для вашего бизнеса, это аудит за 149 долларов: https://oper-stack.com/products/seo-audit/. Если нужно, чтобы работу сделали за вас, пакет Fix за 249 закрывает то, что не требует знания вашего рынка.',
+    rivalsHead: 'Вы и ваши конкуренты',
+    rivalsNote: 'Плюс значит проверка пройдена, тильда спорно, тире провалено, вопрос не измеряли. Замер по скриптам делается только по вашему сайту: для него нужен настоящий браузер, и на четырёх сайтах это утроило бы время.',
     sign: 'OperStack · info@oper-stack.com',
   },
 };
 
-function buildLetter({ host, lang, scores }) {
+function buildLetter({ host, lang, scores, comparison }) {
   const t = COPY[lang];
   const rows = Object.entries(scores || {})
-    .map(([area, v]) => `${area}: ${v ?? (lang === 'ru' ? 'не измерено' : 'not measured')}`)
+    .map(([area, v]) => `${lang === 'ru' ? (AREAS_RU[area] || area) : area}: ${v ?? (lang === 'ru' ? 'не измерено' : 'not measured')}`)
     .join('\n');
-  const text = [t.greeting, '', rows, '', t.whatIsIt, '', t.nextStep, '', t.sign].join('\n');
+  const text = [t.greeting, '', rows, '',
+    ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
+    t.whatIsIt, '', t.nextStep, '', t.sign].join('\n');
   const html = [
     `<p>${t.greeting}</p>`,
     `<pre style="font:14px ui-monospace,monospace;background:#f6f7f9;padding:12px;border-radius:6px">${rows.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+    ...(comparison ? [`<h3 style="font:600 17px ui-sans-serif,system-ui,sans-serif">${t.rivalsHead}</h3>`, comparison.html, `<p style="color:#666;font-size:14px">${t.rivalsNote}</p>`] : []),
     `<p>${t.whatIsIt}</p>`,
     `<p>${t.nextStep}</p>`,
     `<p style="color:#666">${t.sign}</p>`,
@@ -134,15 +192,38 @@ async function main() {
     const result = await render(audit, { out: htmlPath, pdf: true });
     if (!result.pdf) throw new Error('Chrome не напечатал PDF: без него отчёт не отдаём');
 
-    const letter = buildLetter({ host, lang: LANG, scores: audit.scores });
+    // Конкуренты: меряем короче и без браузера. Провал по одному конкуренту не должен уносить
+    // отчёт целиком: покупатель платил за свой сайт, сравнение это добавка.
+    const rivals = [];
+    for (const raw of RIVALS) {
+      let rivalUrl;
+      try { rivalUrl = normaliseUrl(raw); } catch (e) { log(`  конкурент ${raw} пропущен: ${e.message}`); continue; }
+      try {
+        log(`  конкурент ${rivalUrl}`);
+        // Своё время у каждого конкурента. Один медленный чужой сайт не должен задержать отчёт,
+        // за который заплатили: сравнение это добавка, а не то, ради чего покупали.
+        rivals.push(await Promise.race([
+          collect(rivalUrl, { pages: RIVAL_PAGES, lang: LANG, rendered: false, log: () => {} }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`не ответил за ${RIVAL_BUDGET_MS / 1000} с`)), RIVAL_BUDGET_MS)),
+        ]));
+      } catch (e) { log(`  конкурент ${rivalUrl} не прочитался: ${e.message}`); }
+    }
+    const comparison = rivals.length ? buildComparison(audit, rivals, LANG) : null;
+    if (comparison) log(`  сравнение готово: вы и ${rivals.length}`);
+
+    const letter = buildLetter({ host, lang: LANG, scores: audit.scores, comparison });
     const pdf = await readFile(result.pdf);
     log(`  PDF готов: ${(pdf.length / 1024).toFixed(0)} КБ`);
 
-    if (DRY) { log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено`); return; }
+    if (DRY) {
+      log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено`);
+      log('\n' + letter.text);
+      return;
+    }
 
     await send({ to: EMAIL, ...letter, attachment: { filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' } });
     log(`  письмо отправлено: ${EMAIL}`);
-    await notifyTelegram(`📄 Отчёт за 9 отправлен: ${host} → ${EMAIL}`);
+    await notifyTelegram(`📄 Отчёт отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }

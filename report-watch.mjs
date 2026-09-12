@@ -58,7 +58,8 @@ function parseJob(body) {
   let data;
   try { data = JSON.parse(b64urlDecode(payload)); } catch { return { bad: 'payload не разбирается' }; }
   if (!data.url || !data.email) return { bad: 'в заявке нет адреса сайта или почты' };
-  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier: data.tier === '29' ? '29' : '9' };
+  const rivals = Array.isArray(data.rivals) ? data.rivals.map(String).filter(Boolean).slice(0, 3) : [];
+  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier: data.tier === '29' ? '29' : '9', rivals };
 }
 
 async function telegram(text) {
@@ -74,8 +75,10 @@ async function telegram(text) {
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
-function runReport({ url, email, lang }) {
-  const r = spawnSync(process.execPath, [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`], {
+function runReport({ url, email, lang, rivals }) {
+  const args = [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`];
+  if (rivals && rivals.length) args.push(`--rivals=${rivals.join(',')}`);
+  const r = spawnSync(process.execPath, args, {
     cwd: ROOT, encoding: 'utf8', timeout: 20 * 60 * 1000, env: process.env, stdio: ['ignore', 'inherit', 'inherit'],
   });
   return r.status === 0;
@@ -119,7 +122,7 @@ async function main() {
         if (!DRY && !LIST) await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
         failed++; continue;
       }
-      console.log(`  ${job.tier} USD · ${job.url} → ${job.email} (${job.lang})`);
+      console.log(`  ${job.tier} USD · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
       if (LIST || DRY) continue;
 
       const ok = runReport(job);
