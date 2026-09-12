@@ -118,8 +118,11 @@ async function main() {
       if (!job) { console.log(`  пропуск uid ${item.uid}: подписи в письме нет`); continue; }
       if (job.bad) {
         console.error(`  заявка uid ${item.uid} отклонена: ${job.bad}`);
-        await telegram(`⚠️ Заявка на отчёт отклонена: ${job.bad}. Письмо в ящике, uid ${item.uid}.`);
-        if (!DRY && !LIST) await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
+        // Осмотр очереди не должен будить человека: сообщение уходит только при настоящем прогоне.
+        if (!DRY && !LIST) {
+          await telegram(`⚠️ Заявка на отчёт отклонена: ${job.bad}. Письмо в ящике, uid ${item.uid}.`);
+          await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
+        }
         failed++; continue;
       }
       console.log(`  ${job.tier} USD · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
