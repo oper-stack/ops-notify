@@ -59,7 +59,9 @@ function parseJob(body) {
   try { data = JSON.parse(b64urlDecode(payload)); } catch { return { bad: 'payload не разбирается' }; }
   if (!data.url || !data.email) return { bad: 'в заявке нет адреса сайта или почты' };
   const rivals = Array.isArray(data.rivals) ? data.rivals.map(String).filter(Boolean).slice(0, 3) : [];
-  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier: data.tier === '29' ? '29' : '9', rivals };
+  // free это выдача за почту после бесплатной проверки: пять страниц и без списка задач.
+  const tier = ['free', '29', '9'].includes(String(data.tier)) ? String(data.tier) : '9';
+  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals };
 }
 
 async function telegram(text) {
@@ -75,9 +77,10 @@ async function telegram(text) {
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
-function runReport({ url, email, lang, rivals }) {
-  const args = [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`];
-  if (rivals && rivals.length) args.push(`--rivals=${rivals.join(',')}`);
+function runReport({ url, email, lang, rivals, tier }) {
+  const args = [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`, `--tier=${tier}`];
+  // Конкуренты есть только у ступени за 29. На бесплатной их не бывает по определению.
+  if (tier !== 'free' && rivals && rivals.length) args.push(`--rivals=${rivals.join(',')}`);
   const r = spawnSync(process.execPath, args, {
     cwd: ROOT, encoding: 'utf8', timeout: 20 * 60 * 1000, env: process.env, stdio: ['ignore', 'inherit', 'inherit'],
   });
@@ -127,7 +130,7 @@ async function main() {
         // каждое чужое письмо приучил бы не смотреть на красное вообще.
         refused++; continue;
       }
-      console.log(`  ${job.tier} USD · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
+      console.log(`  ${job.tier === 'free' ? 'бесплатно' : `${job.tier} USD`} · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
       if (LIST || DRY) continue;
 
       const ok = runReport(job);

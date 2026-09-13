@@ -12,6 +12,7 @@
  * Ничего не сохраняется: адрес сайта покупателя нам не нужен после того, как письмо ушло.
  *
  *   node report-run.mjs --url=https://example.com --email=buyer@example.com --lang=en
+ *   node report-run.mjs --url=... --email=... --tier=free   бесплатная ступень: 5 страниц, без задач
  *   node report-run.mjs --url=... --email=... --rivals=a.com,b.com,c.com   ступень за 29
  *   node report-run.mjs --url=... --email=... --dry-run   прогнать и не слать письмо
  *
@@ -20,7 +21,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { AREAS_RU, collect, draftNarrative, render, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 
 const args = process.argv.slice(2);
@@ -34,8 +35,14 @@ const RIVAL_PAGES = Number(val('--rival-pages=', '8')) || 8;
 /** Столько времени даём одному конкуренту. Дальше он в сравнение просто не попадает. */
 const RIVAL_BUDGET_MS = Number(val('--rival-budget=', '180')) * 1000;
 const EMAIL = val('--email=');
+/**
+ * Ступень. free это то, что человек получает за почту после бесплатной проверки: пять страниц,
+ * только замер. Список задач в неё не входит, потому что список задач это и есть товар за 9.
+ */
+const TIER = ['free', '9', '29'].includes(val('--tier=', '9')) ? val('--tier=', '9') : '9';
+const FREE = TIER === 'free';
 const LANG = val('--lang=', 'en') === 'ru' ? 'ru' : 'en';
-const PAGES = Number(val('--pages=', '20')) || 20;
+const PAGES = Number(val('--pages=', FREE ? '5' : '20')) || (FREE ? 5 : 20);
 const DRY = has('--dry-run');
 
 const env = (k, d = '') => (process.env[k] || d).trim();
@@ -118,6 +125,9 @@ const COPY = {
   en: {
     subject: (host) => `Your OperStack report: ${host}`,
     greeting: 'Your report is attached as a PDF.',
+    greetingFree: 'Your free report is attached as a PDF. It measures five pages of your site.',
+    nextStepFree:
+      'This free report measures five pages and stops there. The site fix list at 9 USD reads up to twenty and turns every problem above into a task written in plain words: what your site does now, what to change, how to check it is done. https://oper-stack.com/products/site-report/',
     whatIsIt:
       'It is measured, not written by a person: every number in it comes from your live pages, and where something could not be measured the report says so and why.',
     nextStep:
@@ -129,6 +139,9 @@ const COPY = {
   ru: {
     subject: (host) => `Отчёт OperStack: ${host}`,
     greeting: 'Отчёт во вложении, PDF.',
+    greetingFree: 'Бесплатный отчёт во вложении, PDF. В нём измерены пять страниц вашего сайта.',
+    nextStepFree:
+      'Бесплатный отчёт меряет пять страниц и на этом заканчивается. Список задач за 9 долларов читает до двадцати и превращает каждую проблему в задачу обычными словами: что на сайте сейчас, что поменять, как проверить. https://oper-stack.com/products/site-report/',
     whatIsIt:
       'Он измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не удалось, так и написано и сказано почему.',
     nextStep:
@@ -139,26 +152,28 @@ const COPY = {
   },
 };
 
-function buildLetter({ host, lang, scores, comparison }) {
+function buildLetter({ host, lang, scores, comparison, free = false }) {
   const t = COPY[lang];
+  const greeting = free ? t.greetingFree : t.greeting;
+  const nextStep = free ? t.nextStepFree : t.nextStep;
   const rows = Object.entries(scores || {})
     .map(([area, v]) => `${lang === 'ru' ? (AREAS_RU[area] || area) : area}: ${v ?? (lang === 'ru' ? 'не измерено' : 'not measured')}`)
     .join('\n');
-  const text = [t.greeting, '', rows, '',
+  const text = [greeting, '', rows, '',
     ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
-    t.whatIsIt, '', t.nextStep, '', t.sign].join('\n');
+    t.whatIsIt, '', nextStep, '', t.sign].join('\n');
   const html = [
-    `<p>${t.greeting}</p>`,
+    `<p>${greeting}</p>`,
     `<pre style="font:14px ui-monospace,monospace;background:#f6f7f9;padding:12px;border-radius:6px">${rows.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
     ...(comparison ? [`<h3 style="font:600 17px ui-sans-serif,system-ui,sans-serif">${t.rivalsHead}</h3>`, comparison.html, `<p style="color:#666;font-size:14px">${t.rivalsNote}</p>`] : []),
     `<p>${t.whatIsIt}</p>`,
-    `<p>${t.nextStep}</p>`,
+    `<p>${nextStep}</p>`,
     `<p style="color:#666">${t.sign}</p>`,
   ].join('\n');
-  return { subject: t.subject(host), text, html };
+  return { subject: free ? `${t.subject(host)} (free)` : t.subject(host), text, html };
 }
 
-async function send({ to, subject, text, html, attachment }) {
+async function send({ to, subject, text, html, attachments = [] }) {
   const user = env('GOOGLE_USER');
   const pass = env('GOOGLE_APP_PASSWORD');
   if (!user || !pass) throw new Error('нет GOOGLE_USER или GOOGLE_APP_PASSWORD');
@@ -168,7 +183,7 @@ async function send({ to, subject, text, html, attachment }) {
     connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000,
   });
   try {
-    await transport.sendMail({ from: `OperStack <${user}>`, to, subject, text, html, attachments: attachment ? [attachment] : [] });
+    await transport.sendMail({ from: `OperStack <${user}>`, to, subject, text, html, attachments });
   } finally { transport.close(); }
 }
 
@@ -176,7 +191,7 @@ async function main() {
   const site = normaliseUrl(URL_IN);
   if (!EMAIL_RE.test(EMAIL)) throw new Error(`это не похоже на адрес почты: ${EMAIL}`);
   const host = new URL(site).host;
-  log(`отчёт для ${EMAIL}: ${site} (${PAGES} страниц, ${LANG})`);
+  log(`отчёт «${TIER}» для ${EMAIL}: ${site} (${PAGES} страниц, ${LANG})`);
 
   const work = await mkdtemp(path.join(tmpdir(), 'operstack-report-'));
   try {
@@ -221,9 +236,32 @@ async function main() {
     const comparison = rivals.length ? buildComparison(audit, rivals, LANG) : null;
     if (comparison) log(`  сравнение готово: вы и ${rivals.length}`);
 
-    const letter = buildLetter({ host, lang: LANG, scores: audit.scores, comparison });
+    const letter = buildLetter({ host, lang: LANG, scores: audit.scores, comparison, free: FREE });
     const pdf = await readFile(result.pdf);
     log(`  PDF готов: ${(pdf.length / 1024).toFixed(0)} КБ`);
+
+    /**
+     * Список задач: по одной на каждую найденную проблему, обычными словами.
+     *
+     * Это главное, за что платят 9 долларов, и до сих пор он не отправлялся вообще. Страница
+     * подтверждения обещала покупателю два файла, «список задач и замер, из которого они выросли»,
+     * а уходил один. Функция для него в @operstack/audit есть и экспортируется, её просто никто
+     * не звал. В бесплатную ступень задачи не входят: иначе за 9 платить не за что.
+     */
+    const attachments = [{ filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' }];
+    if (!FREE) {
+      const tasks = renderAgentPrompts(audit, { lang: LANG });
+      if (tasks && tasks.trim()) {
+        attachments.push({
+          filename: `what-to-fix-${host.replace(/[^a-z0-9.-]/gi, '_')}.md`,
+          content: Buffer.from(tasks, 'utf8'),
+          contentType: 'text/markdown; charset=utf-8',
+        });
+        log(`  список задач готов: ${(tasks.length / 1024).toFixed(1)} КБ`);
+      } else {
+        log('  список задач пуст: на сайте нет проваленных проверок');
+      }
+    }
 
     if (DRY) {
       log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено`);
@@ -231,9 +269,9 @@ async function main() {
       return;
     }
 
-    await send({ to: EMAIL, ...letter, attachment: { filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' } });
-    log(`  письмо отправлено: ${EMAIL}`);
-    await notifyTelegram(`📄 Отчёт отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
+    await send({ to: EMAIL, ...letter, attachments });
+    log(`  письмо отправлено: ${EMAIL} (вложений: ${attachments.length})`);
+    await notifyTelegram(`📄 ${FREE ? 'Бесплатный отчёт' : 'Отчёт'} отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }
@@ -242,6 +280,6 @@ async function main() {
 main().catch(async (e) => {
   console.error(e.message);
   // Покупатель заплатил. Если что-то сломалось, об этом должен узнать человек, а не логи.
-  await notifyTelegram(`⚠️ Отчёт за 9 НЕ отправлен: ${URL_IN} → ${EMAIL}. Причина: ${e.message}. Сделать руками.`);
+  await notifyTelegram(`⚠️ Отчёт «${TIER}» НЕ отправлен: ${URL_IN} → ${EMAIL}. Причина: ${e.message}. ${TIER === 'free' ? 'Это бесплатная ступень, денег не брали.' : 'Сделать руками.'}`);
   process.exit(1);
 });
