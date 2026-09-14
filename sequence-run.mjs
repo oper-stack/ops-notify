@@ -102,7 +102,7 @@ async function markSent(rows, n) {
 
 /* ------------------------------ почта ------------------------------ */
 
-async function send({ to, subject, text, html }) {
+async function send({ to, subject, text, html, lang = 'en' }) {
   const user = env('GOOGLE_USER');
   const pass = env('GOOGLE_APP_PASSWORD');
   if (!user || !pass) throw new Error('нет GOOGLE_USER или GOOGLE_APP_PASSWORD');
@@ -114,7 +114,7 @@ async function send({ to, subject, text, html }) {
     await transport.sendMail({
       from: `OperStack <${user}>`, to, subject, text, html,
       // Почтовые программы показывают свою кнопку «отписаться», и это снижает жалобы на спам.
-      list: { unsubscribe: { url: unsubUrl(to), comment: 'Unsubscribe' } },
+      list: { unsubscribe: { url: unsubUrl(to, lang), comment: 'Unsubscribe' } },
     });
   } finally { transport.close(); }
 }
@@ -139,9 +139,12 @@ const secret = () => {
   return s;
 };
 
-function unsubUrl(email) {
+function unsubUrl(email, lang = 'en') {
   const body = Buffer.from(email.trim().toLowerCase(), 'utf8').toString('base64url');
-  return `${SITE}/api/unsubscribe/?t=${body}.${createHmac('sha256', secret()).update(body).digest('base64url')}`;
+  // Отписка живёт на том же сайте, что и письмо: подпись общая, а уводить русского
+  // человека на английскую страницу незачем.
+  const site = lang === 'ru' ? 'https://oper-stack.ru' : SITE;
+  return `${site}/api/unsubscribe/?t=${body}.${createHmac('sha256', secret()).update(body).digest('base64url')}`;
 }
 
 /** Ссылка на цену 19. Живёт четыре часа: письмо уходит за четыре часа до конца суток. */
@@ -170,7 +173,7 @@ function due(hours, sent, offerLive) {
 }
 
 function build(n, person) {
-  const unsub = unsubUrl(person.email);
+  const unsub = unsubUrl(person.email, person.lang);
   const { host, score, sites, lang } = person;
   // Русскому человеку пишем по-русски. Цены, ссылки и сравнение с агентством в русских
   // письмах свои: рынок другой, и рубли в переводе английского письма выглядели бы враньём.
@@ -232,7 +235,7 @@ async function main() {
       continue;
     }
     try {
-      await send({ to: p.email, ...mail });
+      await send({ to: p.email, ...mail, lang: p.lang });
       await markSent(p.rows, n);
       sentCount += 1;
       log(`${p.email}: письмо ${n} отправлено («${mail.subject}»)`);
