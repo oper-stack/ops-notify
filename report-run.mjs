@@ -129,7 +129,7 @@ const COPY = {
   en: {
     subject: (host) => `Your OperStack report: ${host}`,
     greeting: 'Your report is attached as a PDF.',
-    greetingFree: 'Two files are attached: the report on your site, and the first fix written out in full. Open them, then come back to this email.',
+    greetingFree: 'Your report is attached as a PDF: everything this check found on your site, area by area. The one fix that moves your score most is in this email, below. Open the report, then come back here.',
     measuredFree: 'It is measured, not written by a person: every number comes from your live pages, and where something could not be measured the report says so and why.',
     firstFixHead: 'The fix that moves your score most',
     firstFixBody: 'Copy it whole and hand it to whoever looks after your site, or paste it into ChatGPT, Claude or Cursor. Keep the Now and How to check lines: without them nobody knows where to start or when it is done.',
@@ -159,7 +159,7 @@ const COPY = {
   ru: {
     subject: (host) => `Отчёт OperStack: ${host}`,
     greeting: 'Отчёт во вложении, PDF.',
-    greetingFree: 'Во вложении два файла: отчёт по вашему сайту и первая правка, расписанная целиком. Откройте их, посмотрите и возвращайтесь к этому письму.',
+    greetingFree: 'Отчёт во вложении, PDF: всё, что проверка нашла на вашем сайте, по областям. Правка, которая сильнее всего двигает балл, ниже в этом письме. Откройте отчёт, посмотрите и возвращайтесь сюда.',
     measuredFree: 'Отчёт измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
     firstFixHead: 'Правка, которая сильнее всего двигает балл',
     firstFixBody: 'Скопируйте её целиком и отдайте тому, кто ведёт вам сайт, или вставьте в ChatGPT, Claude или Cursor. Строки «Сейчас» и «Как проверить» не выбрасывайте: без них исполнитель не поймёт, откуда начинать и чем закончить.',
@@ -175,7 +175,7 @@ const COPY = {
     whatIsIt:
       'Он измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не удалось, так и написано и сказано почему.',
     nextStep:
-      'Если нужно, чтобы каждую находку прочитал человек и написал, что она значит для вашего бизнеса, это аудит за 149 долларов: https://oper-stack.com/products/seo-audit/. Если нужно, чтобы работу сделали за вас, пакет Fix за 249 закрывает то, что не требует знания вашего рынка.',
+      'Если нужно, чтобы каждую находку прочитал человек и написал, что она значит для вашего бизнеса, это аудит за 12 500 ₽: https://oper-stack.ru/produkty/seo-audit/. Если нужно, чтобы работу сделали за вас, это пакет Fix: https://oper-stack.ru/produkty/fix/.',
     rivalsHead: 'Вы и ваши конкуренты',
     rivalsNote: 'Плюс значит проверка пройдена, тильда спорно, тире провалено, вопрос не измеряли. Замер по скриптам делается только по вашему сайту: для него нужен настоящий браузер, и на четырёх сайтах это утроило бы время.',
     sign: 'OperStack · info@oper-stack.com',
@@ -209,11 +209,14 @@ function oneTaskParts(markdown, lang) {
 }
 
 /** Отписка: та же подпись, что у сайта, поэтому ссылка сходится с его страницей. */
-function unsubUrlFor(email) {
+function unsubUrlFor(email, lang) {
   const secret = env('KIT_DOWNLOAD_SECRET');
   if (!secret) return null;
   const body = Buffer.from(String(email).trim().toLowerCase(), 'utf8').toString('base64url');
-  return `https://oper-stack.com/api/unsubscribe/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+  // Отписка живёт на том же сайте, что и письмо: подпись общая, а уводить русского
+  // человека на английскую страницу незачем.
+  const site = lang === 'ru' ? 'https://oper-stack.ru' : 'https://oper-stack.com';
+  return `${site}/api/unsubscribe/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
 function offerUrlFor(email, lang) {
@@ -394,7 +397,7 @@ async function main() {
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
       score: Number.isFinite(SCORE) ? SCORE : null,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
-      unsubUrl: FREE ? unsubUrlFor(EMAIL) : null,
+      unsubUrl: FREE ? unsubUrlFor(EMAIL, LANG) : null,
       firstTask,
     });
     const pdf = await readFile(result.pdf);
