@@ -24,7 +24,7 @@ import path from 'node:path';
 import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
-import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable } from './email-shell.mjs';
+import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
 
 const args = process.argv.slice(2);
 const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).slice(p.length);
@@ -131,6 +131,8 @@ const COPY = {
     greeting: 'Your report is attached as a PDF.',
     greetingFree: 'Two files are attached: the report on your site, and the first fix written out in full. Open them, then come back to this email.',
     measuredFree: 'It is measured, not written by a person: every number comes from your live pages, and where something could not be measured the report says so and why.',
+    firstFixHead: 'The fix that moves your score most',
+    firstFixBody: 'Copy it whole and hand it to whoever looks after your site, or paste it into ChatGPT, Claude or Cursor. Keep the Now and How to check lines: without them nobody knows where to start or when it is done.',
     moreHead: 'Want every problem, not just the first one?',
     moreBody: 'The site fix list reads up to twenty pages instead of five and turns every finding into a task you can hand to anyone.',
     moreCta: 'The site fix list, 9 USD',
@@ -159,6 +161,8 @@ const COPY = {
     greeting: 'Отчёт во вложении, PDF.',
     greetingFree: 'Во вложении два файла: отчёт по вашему сайту и первая правка, расписанная целиком. Откройте их, посмотрите и возвращайтесь к этому письму.',
     measuredFree: 'Отчёт измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
+    firstFixHead: 'Правка, которая сильнее всего двигает балл',
+    firstFixBody: 'Скопируйте её целиком и отдайте тому, кто ведёт вам сайт, или вставьте в ChatGPT, Claude или Cursor. Строки «Сейчас» и «Как проверить» не выбрасывайте: без них исполнитель не поймёт, откуда начинать и чем закончить.',
     moreHead: 'Хотите все проблемы, а не только первую?',
     moreBody: 'Список задач читает до двадцати страниц вместо пяти и превращает каждую находку в задачу, которую можно отдать кому угодно.',
     moreCta: 'Список задач, 800 ₽',
@@ -178,6 +182,32 @@ const COPY = {
   },
 };
 
+/**
+ * Одна задача из готового текста в оформленный блок письма.
+ *
+ * Зачем разбирать: генератор отдаёт markdown, потому что его задумывали как файл. Но задача
+ * короткая, меньше тысячи знаков, и вторым вложением она только мешает: человеку нужно её
+ * скопировать и вставить в помощника, а из письма это делается одним движением, из файла нет.
+ *
+ * Если разметка когда-нибудь изменится и разобрать не выйдет, возвращаем null, и письмо
+ * просто уходит без блока. Ломать доставку отчёта из-за оформления нельзя.
+ */
+function oneTaskParts(markdown, lang) {
+  const L = lang === 'ru'
+    ? { now: 'Сейчас', task: 'Задача', verify: 'Как проверить', rule: 'Правило:' }
+    : { now: 'Now', task: 'Task', verify: 'How to check', rule: 'Rule:' };
+  const grab = (label) => {
+    const m = markdown.match(new RegExp(`\\*\\*${label}:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\n|$)`));
+    return m ? m[1].trim().replace(/\s+/g, ' ') : '';
+  };
+  const now = grab(L.now);
+  const task = grab(L.task);
+  const verify = grab(L.verify);
+  if (!now || !task) return null;
+  const ruleLine = markdown.split('\n').find((l) => l.trim().startsWith(L.rule));
+  return { now, task, verify, rule: ruleLine ? ruleLine.trim() : '' };
+}
+
 /** Отписка: та же подпись, что у сайта, поэтому ссылка сходится с его страницей. */
 function unsubUrlFor(email) {
   const secret = env('KIT_DOWNLOAD_SECRET');
@@ -195,7 +225,7 @@ function offerUrlFor(email, lang) {
   return `https://oper-stack.com/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
-function buildLetter({ host, lang, scores, comparison, free = false, score = null, offerUrl = null, unsubUrl = null }) {
+function buildLetter({ host, lang, scores, comparison, free = false, score = null, offerUrl = null, unsubUrl = null, firstTask = null }) {
   const t = COPY[lang];
   const ru = lang === 'ru';
   const greeting = free ? t.greetingFree : t.greeting;
@@ -208,6 +238,13 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
     ? [greeting, '',
        ...(typeof score === 'number' ? [`${lang === 'ru' ? 'Итог' : 'The score'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`, ''] : []),
        t.measuredFree, '',
+       ...(firstTask
+         ? [t.firstFixHead, '', t.firstFixBody, '',
+            `${lang === 'ru' ? 'Сейчас' : 'Now'}: ${firstTask.now}`, '',
+            `${lang === 'ru' ? 'Что сделать' : 'What to do'}: ${firstTask.task}`, '',
+            `${lang === 'ru' ? 'Как проверить' : 'How to check'}: ${firstTask.verify}`, '',
+            firstTask.rule, '']
+         : []),
        `${t.moreHead} ${t.moreBody}`,
        `${t.moreCta}: ${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`,
        ...(offerUrl
@@ -243,6 +280,11 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
             ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Итог' : 'The score'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.</p>`]
             : []),
           note(t.measuredFree),
+          ...(firstTask
+            ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.firstFixHead}</p>`,
+               par(t.firstFixBody),
+               taskBlock(firstTask)]
+            : []),
           '<hr style="border:0;border-top:1px solid #CFC8BA;margin:24px 0">',
           par(`<strong>${t.moreHead}</strong> ${t.moreBody}`),
           button(`${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`, `${t.moreCta} →`, 'quiet'),
@@ -339,11 +381,21 @@ async function main() {
     const comparison = rivals.length ? buildComparison(audit, rivals, LANG) : null;
     if (comparison) log(`  сравнение готово: вы и ${rivals.length}`);
 
+    // Одна задача на бесплатной ступени уезжает в тело письма, а не вторым файлом: она
+    // короткая, и её нужно копировать, а из вложения это лишнее движение.
+    let firstTask = null;
+    if (FREE) {
+      const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
+      firstTask = one && one.trim() ? oneTaskParts(one, LANG) : null;
+      log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
+    }
+
     const letter = buildLetter({
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
       score: Number.isFinite(SCORE) ? SCORE : null,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
       unsubUrl: FREE ? unsubUrlFor(EMAIL) : null,
+      firstTask,
     });
     const pdf = await readFile(result.pdf);
     log(`  PDF готов: ${(pdf.length / 1024).toFixed(0)} КБ`);
@@ -357,18 +409,7 @@ async function main() {
      * не звал. В бесплатную ступень задачи не входят: иначе за 9 платить не за что.
      */
     const attachments = [{ filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' }];
-    if (FREE) {
-      // Одна задача, та, что сильнее всего двигает балл. Остальные это товар за 9.
-      const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
-      if (one && one.trim()) {
-        attachments.push({
-          filename: `${LANG === 'ru' ? 'pervaya-zadacha' : 'first-fix'}-${host.replace(/[^a-z0-9.-]/gi, '_')}.md`,
-          content: Buffer.from(one, 'utf8'),
-          contentType: 'text/markdown; charset=utf-8',
-        });
-        log(`  первая задача готова: ${(one.length / 1024).toFixed(1)} КБ`);
-      }
-    } else {
+    if (!FREE) {
       const tasks = renderAgentPrompts(audit, { lang: LANG });
       if (tasks && tasks.trim()) {
         attachments.push({
