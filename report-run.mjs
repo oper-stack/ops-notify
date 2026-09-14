@@ -254,8 +254,8 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
   const text = free
     ? [greeting, '',
        ...(typeof score === 'number'
-         ? [`${lang === 'ru' ? 'Видимость в ИИ' : 'AI visibility'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`,
-            lang === 'ru' ? 'Это цифра быстрой проверки. В отчёте шесть областей целиком, и они считаются отдельно.' : 'That is the quick check. The report scores six areas in full, counted separately.', '']
+         ? [`${lang === 'ru' ? 'Итог' : 'The score'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`,
+            lang === 'ru' ? 'Та же цифра стоит на первой странице отчёта, а под ней разбор по шести областям.' : 'The same number heads the report, with the six areas broken out underneath.', '']
          : []),
        t.measuredFree, '',
        ...(firstTask
@@ -297,7 +297,7 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
           par(greeting),
           // Балл одной строкой: ради этой цифры человек и оставлял почту, а подробности в файле.
           ...(typeof score === 'number'
-            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Видимость в ИИ' : 'AI visibility'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.<br><span style="font-size:14px;color:#5A6470">${ru ? 'Это цифра быстрой проверки. В отчёте шесть областей целиком, и они считаются отдельно.' : 'That is the quick check. The report scores six areas in full, counted separately.'}</span></p>`]
+            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Итог' : 'The score'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.<br><span style="font-size:14px;color:#5A6470">${ru ? 'Та же цифра стоит на первой странице отчёта, а под ней разбор по шести областям.' : 'The same number heads the report, with the six areas broken out underneath.'}</span></p>`]
             : []),
           note(t.measuredFree),
           ...(firstTask
@@ -422,7 +422,11 @@ async function main() {
     const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
-      score: Number.isFinite(SCORE) ? SCORE : null,
+      // Балл берём из самого отчёта. Раньше он приходил в заявке со страницы проверки, и в одном
+      // письме стояло «45 из 100» рядом с вложением, где области давали 73 процента. Человек
+      // читает это как выдуманные цифры, и он прав. Теперь письмо и PDF считают одно и то же
+      // число одним и тем же кодом. Цифра из заявки остаётся запасной на случай старого пакета.
+      score: Number.isFinite(audit.overall?.score) ? audit.overall.score : (Number.isFinite(SCORE) ? SCORE : null),
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
       unsubUrl,
       firstTask,
