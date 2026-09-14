@@ -68,7 +68,10 @@ function parseJob(body) {
   // Балл со страницы проверки, если заявка его принесла: письмо должно называть ту же цифру,
   // которую человек только что видел своими глазами.
   const score = Number.isFinite(Number(data.score)) ? Number(data.score) : null;
-  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals, score };
+  // Результат проверки со страницы едет целиком и передаётся отчёту как есть: мерить второй раз
+  // нельзя, два честных замера живого сайта расходятся на пару баллов.
+  const visibility = data.visibility && typeof data.visibility === 'object' ? data.visibility : null;
+  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals, score, visibility };
 }
 
 async function telegram(text) {
@@ -144,9 +147,11 @@ async function sendFailureNote({ email, url, lang }) {
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
-function runReport({ url, email, lang, rivals, tier, score }) {
+function runReport({ url, email, lang, rivals, tier, score, visibility }) {
   const args = [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`, `--tier=${tier}`];
   if (score !== null && score !== undefined) args.push(`--score=${score}`);
+  // Объект едет одной строкой в base64url: так он переживает и разбор аргументов, и кавычки.
+  if (visibility) args.push(`--visibility=${Buffer.from(JSON.stringify(visibility)).toString('base64url')}`);
   // Конкуренты есть только у ступени за 29. На бесплатной их не бывает по определению.
   if (tier !== 'free' && rivals && rivals.length) args.push(`--rivals=${rivals.join(',')}`);
   const r = spawnSync(process.execPath, args, {
