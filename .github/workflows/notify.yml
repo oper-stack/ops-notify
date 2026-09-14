@@ -1,11 +1,16 @@
 name: ops-notify
 
+# Минуты Actions на бесплатном плане организации ограничены, а расписания здесь частые.
+# Замерено 14.09.2026: 160 прогонов и около 177 минут в сутки, то есть месячный лимит
+# кончался бы к 22 сентября, и очередь отчётов встала бы посреди трафика. Поэтому очередь
+# ходит по расписанию раз в пятнадцать минут как подстраховка, а настоящую работу ей даёт
+# сам сайт через workflow_dispatch сразу по заявке.
 on:
   schedule:
     - cron: '*/10 * * * *'   # sales inbox to Telegram, every ten minutes (GitHub may delay a few minutes)
     - cron: '0 12 * * *'     # daily digest at 12:00 UTC, 09:00 Argentina
     - cron: '0 6 * * *'      # продукты: прогон того, что продаём, на своём сайте, 06:00 UTC
-    - cron: '*/5 * * * *'    # очередь отчётов: заявки покупателей, каждые пять минут
+    - cron: '*/15 * * * *'   # очередь отчётов: подстраховка. Обычно её будит сам сайт, сразу по заявке
     - cron: '0 10 * * *'     # цепочка писем после бесплатной проверки, 10:00 UTC
   workflow_dispatch:
     inputs:
@@ -23,6 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci --omit=dev
       - run: node notify-mail.mjs
         env:
@@ -73,7 +79,7 @@ jobs:
     # Очередь отчётов за 9 долларов. Заявка приходит служебным письмом с oper-stack.com, здесь она
     # выполняется и покупателю уходит PDF. Chrome на ubuntu-latest уже стоит: он и печатает отчёт,
     # и меряет, сколько текста пропадает без скриптов.
-    if: github.event.schedule == '*/5 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report')
+    if: github.event.schedule == '*/15 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -84,6 +90,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci --omit=dev
       - run: node report-watch.mjs
         env:
@@ -108,6 +115,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci --omit=dev
       - run: node sequence-run.mjs
         env:
