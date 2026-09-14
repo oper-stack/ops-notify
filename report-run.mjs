@@ -21,7 +21,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, computeOverall, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
@@ -419,14 +419,19 @@ async function main() {
       log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
     }
 
+    // Считаем до письма и до вёрстки, чтобы обе стороны взяли одно и то же число.
+    const overall = computeOverall(audit.checks);
+    const overallScore = Number.isFinite(overall?.score) ? overall.score : (Number.isFinite(SCORE) ? SCORE : null);
+    log(`  общий балл: ${overallScore ?? 'не посчитан'} из 100`);
+
     const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
-      // Балл берём из самого отчёта. Раньше он приходил в заявке со страницы проверки, и в одном
-      // письме стояло «45 из 100» рядом с вложением, где области давали 73 процента. Человек
-      // читает это как выдуманные цифры, и он прав. Теперь письмо и PDF считают одно и то же
-      // число одним и тем же кодом. Цифра из заявки остаётся запасной на случай старого пакета.
-      score: Number.isFinite(audit.overall?.score) ? audit.overall.score : (Number.isFinite(SCORE) ? SCORE : null),
+      // Балл считаем здесь же тем вызовом, которым его считает вёрстка PDF, и по тому же
+      // объекту проверок. Готовое поле audit.overall брать нельзя: оно снимается раньше, чем
+      // в отчёт попадают проверки из настоящего браузера, и письмо расходилось с вложением на
+      // два пункта. Одна функция, один набор проверок, один момент: разойтись нечему.
+      score: overallScore,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
       unsubUrl,
       firstTask,
