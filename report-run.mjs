@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
+import { button, emailShell, note, p as par, scoreTable } from './email-shell.mjs';
 
 const args = process.argv.slice(2);
 const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).slice(p.length);
@@ -154,6 +155,7 @@ const COPY = {
 
 function buildLetter({ host, lang, scores, comparison, free = false }) {
   const t = COPY[lang];
+  const ru = lang === 'ru';
   const greeting = free ? t.greetingFree : t.greeting;
   const nextStep = free ? t.nextStepFree : t.nextStep;
   const rows = Object.entries(scores || {})
@@ -162,14 +164,32 @@ function buildLetter({ host, lang, scores, comparison, free = false }) {
   const text = [greeting, '', rows, '',
     ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
     t.whatIsIt, '', nextStep, '', t.sign].join('\n');
-  const html = [
-    `<p>${greeting}</p>`,
-    `<pre style="font:14px ui-monospace,monospace;background:#f6f7f9;padding:12px;border-radius:6px">${rows.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
-    ...(comparison ? [`<h3 style="font:600 17px ui-sans-serif,system-ui,sans-serif">${t.rivalsHead}</h3>`, comparison.html, `<p style="color:#666;font-size:14px">${t.rivalsNote}</p>`] : []),
-    `<p>${t.whatIsIt}</p>`,
-    `<p>${nextStep}</p>`,
-    `<p style="color:#666">${t.sign}</p>`,
-  ].join('\n');
+  // Заголовок двумя строками: домен не должен рваться посередине.
+  const heading = ru
+    ? ['Ваш отчёт по сайту', host]
+    : ['Your report for', host];
+  const areaRows = Object.entries(scores || {}).map(([area, v]) => [
+    ru ? (AREAS_RU[area] || area) : area,
+    typeof v === 'number' ? v : null,
+  ]);
+  const html = emailShell({
+    site: lang,
+    preheader: free
+      ? (ru ? 'Бесплатный отчёт во вложении' : 'Your free report is attached')
+      : (ru ? 'Отчёт и список задач во вложении' : 'Your report and task list are attached'),
+    heading,
+    blocks: [
+      par(greeting),
+      scoreTable(areaRows),
+      ...(comparison
+        ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.rivalsHead}</p>`,
+           `<div style="overflow-x:auto">${comparison.html}</div>`,
+           note(t.rivalsNote)]
+        : []),
+      par(t.whatIsIt),
+      par(nextStep),
+    ],
+  });
   return { subject: free ? `${t.subject(host)} (free)` : t.subject(host), text, html };
 }
 

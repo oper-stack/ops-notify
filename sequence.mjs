@@ -11,6 +11,8 @@
  * человеком у нас стоит 149.
  */
 
+import { button, emailShell } from './email-shell.mjs';
+
 const SITE = 'https://oper-stack.com';
 const MCP = 'https://oper-stack.com/api/mcp/';
 
@@ -44,19 +46,40 @@ function mcpBlockHtml(lead) {
 }
 
 /** Обёртка письма: тело плюс подпись и отписка. Отписка обязана быть в каждом письме. */
-function wrap({ subject, bodyText, bodyHtml, unsubUrl }) {
+/**
+ * Абзацы в письмах написаны обычными тегами, а почта своих стилей не имеет: без этого
+ * текст показался бы шрифтом с засечками по умолчанию. Поэтому голым <p> и <ul> здесь
+ * проставляется тот же вид, что у остальных писем. Теги, у которых стиль уже есть,
+ * не трогаем: это врезки, которые оформлены по-своему.
+ */
+const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const dress = (html) => String(html)
+  .replace(/<p>/g, `<p style="margin:0 0 16px;font-family:${FONT_STACK};font-size:16px;line-height:1.55;color:#14181C">`)
+  // Абзацу, у которого стиль уже есть, но шрифт не назван, дописываем шрифт: иначе почта
+  // рисует его своим по умолчанию, с засечками, и он выпадает из письма.
+  .replace(/<p style="(?![^"]*font-family)([^"]*)"/g, `<p style="font-family:${FONT_STACK};line-height:1.5;$1"`)
+  .replace(/<ul>/g, `<ul style="margin:0 0 16px;padding-left:20px;font-family:${FONT_STACK};font-size:16px;line-height:1.55;color:#14181C">`)
+  .replace(/<li>/g, '<li style="margin:6px 0">')
+  // Ссылка без своего стиля станет синей и подчёркнутой, как в почте по умолчанию, и выпадет
+  // из письма. Кнопки и ссылки во врезках свой стиль уже имеют, их не трогаем.
+  .replace(/<a href="(?![^"]*")/g, '<a href="')
+  .replace(/<a (href="[^"]*")(?![^>]*style=)/g, '<a $1 style="color:#1A8A7D"');
+
+function wrap({ subject, bodyText, bodyHtml, unsubUrl, heading, preheader }) {
   const text = [...bodyText, '', 'OperStack · info@oper-stack.com', `Not interested? One click and we stop: ${unsubUrl}`].join('\n');
-  const html = [
-    ...bodyHtml,
-    `<p style="color:#888;font-size:13px;margin-top:26px">OperStack · info@oper-stack.com<br>`
-    + `<a href="${unsubUrl}" style="color:#888">Not interested? One click and we stop.</a></p>`,
-  ].join('\n');
+  // Заголовок письма по умолчанию совпадает с темой: дублировать её незачем, а расходиться
+  // с ней нельзя, иначе человек открывает письмо и видит не то, что обещал список писем.
+  const html = emailShell({
+    site: 'en',
+    preheader: preheader || subject,
+    heading: heading || subject,
+    blocks: bodyHtml.map(dress),
+    unsubUrl,
+  });
   return { subject, text, html };
 }
 
-const btn = (href, label) =>
-  `<p style="margin:20px 0"><a href="${href}" style="display:inline-block;background:#1A8A7D;color:#fff;`
-  + `padding:11px 22px;border-radius:8px;font-weight:600;text-decoration:none">${label}</a></p>`;
+const btn = (href, label) => button(href, label);
 
 /**
  * Письмо 2. Сутки на полный отчёт за 19 вместо 29.
