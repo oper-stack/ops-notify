@@ -36,6 +36,8 @@ const USER = env('GOOGLE_USER');
 const PASS = env('GOOGLE_APP_PASSWORD');
 const SECRET = env('KIT_DOWNLOAD_SECRET');
 const LABEL = env('REPORT_LABEL', 'ReportDone');
+/** Ярлык «одну попытку уже потратили». Он и есть счётчик: второго провала заявка не переживёт. */
+const RETRY_LABEL = env('REPORT_RETRY_LABEL', 'ReportRetry');
 const LOOKBACK_DAYS = Number(env('REPORT_LOOKBACK_DAYS', '3'));
 /** Больше этого за один прогон не берём: работа идёт в GitHub Actions с ограничением по времени. */
 const MAX_PER_RUN = Number(env('REPORT_MAX_PER_RUN', '3'));
@@ -98,9 +100,11 @@ async function main() {
   const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user: USER, pass: PASS }, logger: false });
   await client.connect();
   const queue = [];
+  let retried = new Set();
   try {
     const boxes = await client.list();
     if (!boxes.some((b) => b.path === LABEL) && !DRY && !LIST) await client.mailboxCreate(LABEL);
+    if (!boxes.some((b) => b.path === RETRY_LABEL) && !DRY && !LIST) await client.mailboxCreate(RETRY_LABEL);
 
     // Ищем во «Всей почте», а не во «Входящих»: заявку шлёт наш же сайт с нашего же адреса, и
     // Gmail такое письмо может положить только в отправленные. Во «Всей почте» оно есть всегда.
@@ -109,6 +113,9 @@ async function main() {
     try {
       // Сначала собираем, потом действуем: команда во время открытого потока fetch вешает соединение.
       const uids = await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d "REPORT-RUN v1" -label:${LABEL}` }, { uid: true });
+      // Кому одна попытка уже досталась. Список снимаем до фетча: команда во время открытого
+      // потока вешает соединение.
+      retried = new Set((await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d "REPORT-RUN v1" label:${RETRY_LABEL}` }, { uid: true })) || []);
       if (uids && uids.length) {
         for await (const msg of client.fetch(uids, { uid: true, envelope: true, source: true }, { uid: true })) {
           queue.push({ uid: msg.uid, subject: msg.envelope?.subject || '', body: msg.source ? msg.source.toString('utf8') : '' });
@@ -138,13 +145,25 @@ async function main() {
       if (LIST || DRY) continue;
 
       const ok = runReport(job);
-      if (ok) done++; else failed++;
-      // Помечаем в любом случае: при провале уже ушло сообщение в Telegram, и повторять
-      // автоматически нельзя, иначе покупатель получит пять писем об одной ошибке.
-      // В «Всей почте» перенос равносилен навешиванию ярлыка: он и нужен, чтобы поиск
-      // с -label больше эту заявку не возвращал.
-      await client.messageFlagsAdd(String(item.uid), ['\\Seen'], { uid: true }).catch(() => {});
-      await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
+      // В «Всей почте» перенос равносилен навешиванию ярлыка: он и нужен, чтобы поиск с -label
+      // больше эту заявку не возвращал.
+      const close = async () => {
+        await client.messageFlagsAdd(String(item.uid), ['\\Seen'], { uid: true }).catch(() => {});
+        await client.messageCopy(String(item.uid), LABEL, { uid: true }).catch(() => {});
+      };
+      if (ok) { done++; await close(); continue; }
+      failed++;
+      // Почта отказывает и по временным причинам: Gmail отвечает 451 «попробуйте позже», и
+      // заявка, закрытая на таком ответе, оставляет покупателя без отчёта навсегда. Даём ровно
+      // одну вторую попытку через пять минут, на следующем прогоне очереди. Ровно одну, иначе
+      // на сломанной заявке человек получит пять писем об одной ошибке.
+      if (retried.has(item.uid)) {
+        await telegram(`❌ Отчёт для ${job.email} не ушёл и со второй попытки. Заявка закрыта, ${job.url}.`);
+        await close();
+      } else {
+        await telegram(`⚠️ Отчёт для ${job.email} не ушёл (${job.url}). Повторим через пять минут.`);
+        await client.messageCopy(String(item.uid), RETRY_LABEL, { uid: true }).catch(() => {});
+      }
     }
 
     // Убираем отработанные заявки из «Входящих». Ярлык мы уже повесили; здесь письмо уходит
