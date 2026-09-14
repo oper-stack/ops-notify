@@ -87,9 +87,10 @@ async function main() {
         const subject = msg.envelope?.subject || '(без темы)';
         const to = [...(msg.envelope?.to || []), ...(msg.envelope?.cc || [])].map((t) => t.address || '');
         if (!to.length || !to.every(isOwn)) continue;
-        if (new Date(msg.internalDate).getTime() > cutoff) continue;
-        // Адрес с меткой это всегда проверка: разбирать тему незачем.
+        // Адрес с меткой это всегда проверка: ни темы разбирать, ни выдерживать запас не нужно.
+        // Запас существует ради очередей, а на info+test@ заявки не приходят по определению.
         if (!to.every(isTagged)) {
+          if (new Date(msg.internalDate).getTime() > cutoff) continue;
           if (queued.has(msg.uid)) continue;
           if (KEEP_SUBJECT.some((re) => re.test(subject)) || KEEP_MONEY.test(subject)) continue;
         }
