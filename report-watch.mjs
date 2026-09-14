@@ -61,7 +61,10 @@ function parseJob(body) {
   const rivals = Array.isArray(data.rivals) ? data.rivals.map(String).filter(Boolean).slice(0, 3) : [];
   // free это выдача за почту после бесплатной проверки: пять страниц и без списка задач.
   const tier = ['free', '29', '9'].includes(String(data.tier)) ? String(data.tier) : '9';
-  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals };
+  // Балл со страницы проверки, если заявка его принесла: письмо должно называть ту же цифру,
+  // которую человек только что видел своими глазами.
+  const score = Number.isFinite(Number(data.score)) ? Number(data.score) : null;
+  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals, score };
 }
 
 async function telegram(text) {
@@ -77,8 +80,9 @@ async function telegram(text) {
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
-function runReport({ url, email, lang, rivals, tier }) {
+function runReport({ url, email, lang, rivals, tier, score }) {
   const args = [resolve(ROOT, 'report-run.mjs'), `--url=${url}`, `--email=${email}`, `--lang=${lang}`, `--tier=${tier}`];
+  if (score !== null && score !== undefined) args.push(`--score=${score}`);
   // Конкуренты есть только у ступени за 29. На бесплатной их не бывает по определению.
   if (tier !== 'free' && rivals && rivals.length) args.push(`--rivals=${rivals.join(',')}`);
   const r = spawnSync(process.execPath, args, {

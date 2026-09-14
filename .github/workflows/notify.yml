@@ -5,7 +5,7 @@ on:
     - cron: '*/10 * * * *'   # sales inbox to Telegram, every ten minutes (GitHub may delay a few minutes)
     - cron: '0 12 * * *'     # daily digest at 12:00 UTC, 09:00 Argentina
     - cron: '0 6 * * *'      # продукты: прогон того, что продаём, на своём сайте, 06:00 UTC
-    - cron: '5,20,35,50 * * * *'  # очередь отчётов за 9: заявки покупателей, каждые 15 минут
+    - cron: '*/5 * * * *'    # очередь отчётов: заявки покупателей, каждые пять минут
     - cron: '0 10 * * *'     # цепочка писем после бесплатной проверки, 10:00 UTC
   workflow_dispatch:
     inputs:
@@ -67,7 +67,7 @@ jobs:
     # Очередь отчётов за 9 долларов. Заявка приходит служебным письмом с oper-stack.com, здесь она
     # выполняется и покупателю уходит PDF. Chrome на ubuntu-latest уже стоит: он и печатает отчёт,
     # и меряет, сколько текста пропадает без скриптов.
-    if: github.event.schedule == '5,20,35,50 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report')
+    if: github.event.schedule == '*/5 * * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'report')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
