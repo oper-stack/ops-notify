@@ -30,6 +30,7 @@
 import { createHmac, createSign } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { letter2, letter3, letter4Agency, letter4Owner, letter5, letter6 } from './sequence.mjs';
+import * as RU from './sequence.ru.mjs';
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry-run');
@@ -73,6 +74,7 @@ async function readRows() {
   return ((await res.json()).values ?? []).map((r, i) => ({
     row: i + 2,
     date: String(r[0] ?? ''),
+    lang: String(r[1] ?? '').trim().toLowerCase() === 'ru' ? 'ru' : 'en',
     host: String(r[2] ?? ''),
     score: String(r[3] ?? ''),
     email: String(r[5] ?? '').trim().toLowerCase(),
@@ -169,7 +171,16 @@ function due(hours, sent, offerLive) {
 
 function build(n, person) {
   const unsub = unsubUrl(person.email);
-  const { host, score, sites } = person;
+  const { host, score, sites, lang } = person;
+  // Русскому человеку пишем по-русски. Цены, ссылки и сравнение с агентством в русских
+  // письмах свои: рынок другой, и рубли в переводе английского письма выглядели бы враньём.
+  if (lang === 'ru') {
+    if (n === 3) return RU.letter3({ host, unsubUrl: unsub });
+    if (n === 4) return sites > 1 ? RU.letter4Agency({ sites, unsubUrl: unsub }) : RU.letter4Owner({ host, score, unsubUrl: unsub });
+    if (n === 5) return RU.letter5({ host, score, unsubUrl: unsub });
+    if (n === 6) return RU.letter6({ host, unsubUrl: unsub });
+    throw new Error(`нет русского письма номер ${n}`);
+  }
   if (n === 2) return letter2({ host, score, offerUrl: offerUrl(person.email), unsubUrl: unsub });
   if (n === 3) return letter3({ host, unsubUrl: unsub });
   if (n === 4) return sites > 1 ? letter4Agency({ sites, unsubUrl: unsub }) : letter4Owner({ host, score, unsubUrl: unsub });
@@ -190,11 +201,12 @@ async function main() {
   const people = new Map();
   for (const r of rows) {
     if (!r.email) continue;
-    const p = people.get(r.email) ?? { email: r.email, rows: [], sites: new Set(), first: r.date, host: r.host, score: r.score, letters: '', unsubscribed: false };
+    const p = people.get(r.email) ?? { email: r.email, rows: [], sites: new Set(), first: r.date, host: r.host, score: r.score, lang: r.lang, letters: '', unsubscribed: false };
     p.rows.push(r);
     if (r.host) p.sites.add(r.host);
     if (r.date && r.date < p.first) p.first = r.date;
-    if (r.date && r.date >= (p.lastDate ?? '')) { p.lastDate = r.date; p.host = r.host || p.host; p.score = r.score || p.score; }
+    // Язык берём из самого свежего прогона: человек мог начать на одном сайте, а вернуться на другой.
+    if (r.date && r.date >= (p.lastDate ?? '')) { p.lastDate = r.date; p.host = r.host || p.host; p.score = r.score || p.score; p.lang = r.lang; }
     if (r.letters) p.letters = r.letters;
     if (r.unsubscribed) p.unsubscribed = true;
     people.set(r.email, p);
@@ -209,13 +221,14 @@ async function main() {
     if (!Number.isFinite(started)) { log(`${p.email}: непонятная дата «${p.first}», пропускаю`); continue; }
     const hours = (now - started) / 3600000;
     const sent = p.letters.split(',').map((s) => s.trim()).filter(Boolean);
-    const n = due(hours, sent, offerLive);
+    // Письма про цену со скидкой на русском нет: там нет мгновенной кассы, заказ идёт счётом.
+    const n = due(hours, sent, offerLive && p.lang !== 'ru');
     if (!n) continue;
 
-    const person = { email: p.email, host: p.host, score: p.score, sites: p.sites.size };
+    const person = { email: p.email, host: p.host, score: p.score, sites: p.sites.size, lang: p.lang };
     const mail = build(n, person);
     if (DRY) {
-      log(`[сухой прогон] ${p.email}: письмо ${n} «${mail.subject}» (${hours.toFixed(0)} ч, сайтов ${person.sites})`);
+      log(`[сухой прогон] ${p.email}: письмо ${n} «${mail.subject}» (${hours.toFixed(0)} ч, сайтов ${person.sites}, язык ${person.lang})`);
       continue;
     }
     try {
