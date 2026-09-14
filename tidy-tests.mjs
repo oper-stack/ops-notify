@@ -13,6 +13,10 @@
  * никогда. Русский сайт кладёт копию каждого своего письма в info@, но копия это второй адрес
  * рядом с адресом покупателя, а не единственный, поэтому она тоже остаётся на месте.
  *
+ * Плюс узкий список квитанций от служб: письмо пришло со стороны, но сообщает о том, что мы
+ * сделали сами, и решения не требует. Сейчас это «Successfully published» от npm. Письма про
+ * вход, токены и безопасность от того же отправителя остаются во «Входящих».
+ *
  * Чего правило не трогает, кроме этого:
  *   - заявки очередей (в теле «REPORT-RUN v1» или «PROSPECT-RUN v1»): их читают report-watch.mjs
  *     и prospect-watch, и убрать их отсюда значило бы оставить покупателя без отчёта;
@@ -52,6 +56,16 @@ const OWN = ['info@oper-stack.com', 'billing@oper-stack.com', 'accounts@oper-sta
 const KEEP_SUBJECT = [/^Report request:/i, /^Prospect run:/i, /^Заказ OS-/i];
 /** Подписи очередей в теле: второй заслон на случай, если тема письма однажды изменится. */
 const KEEP_BODY = /REPORT-RUN v1|PROSPECT-RUN v1/;
+/**
+ * Квитанции служб: письмо приходит со стороны, но сообщает о том, что мы сделали сами, и
+ * решения не требует. Список узкий и по отправителю: у npm это «Successfully published», а
+ * письма про вход, токены и безопасность от того же отправителя остаются во «Входящих».
+ * Расширять по одной строке и только там, где письмо ничего не спрашивает.
+ */
+const RECEIPTS = [
+  { from: 'npmjs.com', subject: /^Successfully published /i },
+];
+
 /** Деньги и подтверждения остаются во «Входящих», кто бы их ни прислал. */
 const KEEP_MONEY = /счёт|счет|оплат|платёж|платеж|invoice|payment|payout|receipt|refund|chargeback|verification|verify|код подтверждения/i;
 
@@ -74,7 +88,7 @@ async function main() {
     const lock = await client.getMailboxLock('INBOX');
     const move = [];
     try {
-      const fromUs = OWN.map((a) => `from:${a}`).join(' OR ');
+      const fromUs = [...OWN.map((a) => `from:${a}`), ...RECEIPTS.map((r) => `from:${r.from}`)].join(' OR ');
       const candidates = (await client.search({ gmailRaw: `in:inbox (${fromUs})` }, { uid: true })) || [];
       if (!candidates.length) { console.log('во «Входящих» служебных писем нет'); return; }
       // Заявки очередей вытаскиваем отдельным поиском по телу: так их не потерять, даже если
@@ -85,6 +99,17 @@ async function main() {
       // Сначала собираем, потом действуем: команда во время открытого потока fetch вешает соединение.
       for await (const msg of client.fetch(candidates, { uid: true, envelope: true, internalDate: true }, { uid: true })) {
         const subject = msg.envelope?.subject || '(без темы)';
+        const from = (msg.envelope?.from?.[0]?.address || '').toLowerCase();
+        // Квитанция службы: отправитель чужой, поэтому правило «все получатели наши» к ней не
+        // применяется. Зато тема должна совпасть точно, иначе письмо остаётся на месте.
+        if (RECEIPTS.some((r) => from.includes(r.from) && r.subject.test(subject))) {
+          if (!KEEP_MONEY.test(subject)) move.push({ uid: msg.uid, subject });
+          continue;
+        }
+        // Дальше идёт правило «с нашего адреса на наш же». Отправитель обязан быть нашим:
+        // без этой строки письма служб, попавшие в поиск ради квитанций, уезжали бы под ярлык
+        // по одному признаку «адресовано нам», включая коды входа и уведомления о токенах.
+        if (!isOwn(from)) continue;
         const to = [...(msg.envelope?.to || []), ...(msg.envelope?.cc || [])].map((t) => t.address || '');
         if (!to.length || !to.every(isOwn)) continue;
         // Адрес с меткой это всегда проверка: ни темы разбирать, ни выдерживать запас не нужно.
