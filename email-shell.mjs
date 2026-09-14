@@ -124,7 +124,7 @@ export function emailShell({ preheader, heading, blocks, unsubUrl, site }) {
       <tr><td style="padding:18px 4px 0;font-family:${FONT};font-size:13px;line-height:1.6;color:${C.dim}">
         <a href="${site === 'ru' ? SITE_RU : SITE_EN}" style="color:${C.dim};text-decoration:none">${site === 'ru' ? 'oper-stack.ru' : 'oper-stack.com'}</a>
         &nbsp;·&nbsp;
-        <a href="mailto:${site === 'ru' ? 'info@oper-stack.ru' : 'info@oper-stack.com'}" style="color:${C.dim};text-decoration:none">${site === 'ru' ? 'info@oper-stack.ru' : 'info@oper-stack.com'}</a>
+        <a href="mailto:info@oper-stack.com" style="color:${C.dim};text-decoration:none">info@oper-stack.com</a>
         ${unsubUrl ? `<br><a href="${unsubUrl}" style="color:${C.dim};text-decoration:underline">${site === 'ru' ? 'Не нужны письма? Одно нажатие, и мы перестанем.' : 'Not interested? One click and we stop.'}</a>` : ''}
       </td></tr>
     </table>

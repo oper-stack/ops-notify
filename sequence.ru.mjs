@@ -35,7 +35,7 @@ const dress = (html) => String(html)
   .replace(/<a (href="[^"]*")(?![^>]*style=)/g, '<a $1 style="color:#1A8A7D"');
 
 function wrap({ subject, bodyText, bodyHtml, unsubUrl, heading, preheader }) {
-  const text = [...bodyText, '', 'OperStack · info@oper-stack.ru', `Не нужны письма? Одно нажатие, и мы перестанем: ${unsubUrl}`].join('\n');
+  const text = [...bodyText, '', 'OperStack · info@oper-stack.com', `Не нужны письма? Одно нажатие, и мы перестанем: ${unsubUrl}`].join('\n');
   const html = emailShell({
     site: 'ru',
     preheader: preheader || subject,
