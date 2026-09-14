@@ -23,6 +23,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ImapFlow } from 'imapflow';
+import nodemailer from 'nodemailer';
+import { button, emailShell, note, p as par } from './email-shell.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -79,6 +81,66 @@ async function telegram(text) {
       signal: AbortSignal.timeout(8000),
     });
   } catch (e) { console.error('telegram:', e.message); }
+}
+
+/**
+ * Письмо человеку, когда отчёт сделать не удалось.
+ *
+ * Простым языком: он оставил почту и ждёт. Если мы промолчим, для него это выглядит так, что
+ * бесплатный продукт просто не работает, и второй раз он не придёт. Поэтому вместо тишины
+ * уходит короткое письмо: что случилось, почему так бывает и что делать дальше.
+ *
+ * Никаких сроков и обещаний перезвонить здесь нет и быть не должно: мы не знаем, когда до
+ * этого дойдут руки. Обещаем только то, что уже правда: проверка на странице бесплатна и
+ * открыта, а написать нам можно.
+ *
+ * Уходит один раз, после второй неудачной попытки, чтобы человек не получил два письма об
+ * одной поломке.
+ */
+async function sendFailureNote({ email, url, lang }) {
+  const user = env('GOOGLE_USER'); const pass = env('GOOGLE_APP_PASSWORD');
+  if (!user || !pass) return false;
+  let host = url;
+  try { host = new URL(url).host; } catch { /* оставляем как есть */ }
+  const ru = lang === 'ru';
+  const site = ru ? 'https://oper-stack.ru' : 'https://oper-stack.com';
+  const t = ru
+    ? {
+        subject: `Не получилось собрать отчёт по ${host}`,
+        heading: ['Не получилось собрать отчёт', host],
+        lead: `Вы оставили почту, чтобы получить отчёт по <strong>${host}</strong>, и мы обещали письмо. Отчёта не будет, и честнее сказать об этом, чем молчать.`,
+        why: 'Сборщику не удалось открыть ни одной страницы вашего сайта. Чаще всего так бывает, когда сайт отвечает слишком долго, отдаёт очень тяжёлые страницы или закрыт для обращений извне. Проверка на странице читает одну страницу и поэтому прошла, а отчёт читает пять и до них не добрался.',
+        what: 'Напишите нам на info@oper-stack.com, и мы прогоним его руками. Адрес сайта указывать не нужно, он у нас есть.',
+        again: 'Проверка остаётся бесплатной и открытой, её можно прогнать ещё раз в любой момент.',
+        cta: 'Открыть проверку',
+      }
+    : {
+        subject: `We could not build the report for ${host}`,
+        heading: ['We could not build the report for', host],
+        lead: `You left your email for a report on <strong>${host}</strong>, and we promised one. There will be no report, and saying so is better than silence.`,
+        why: 'Our collector could not open a single page of your site. Usually that means the site answers too slowly, serves very heavy pages, or is closed to outside requests. The check on the page reads one page and went through; the report reads five and never got to them.',
+        what: 'Write to info@oper-stack.com and we will run it by hand. No need to give the address again, we have it.',
+        again: 'The check itself stays free and open, and you can run it again whenever you like.',
+        cta: 'Open the check',
+      };
+  const html = emailShell({
+    site: ru ? 'ru' : 'en',
+    preheader: t.subject,
+    heading: t.heading,
+    blocks: [par(t.lead), par(t.why), par(`<strong>${t.what}</strong>`), button(`${site}/ai-visibility/`, `${t.cta} →`, 'quiet'), note(t.again)],
+  });
+  const text = [t.lead.replace(/<[^>]+>/g, ''), '', t.why, '', t.what, '', t.again, '', `${site}/ai-visibility/`].join('\n');
+  const transport = nodemailer.createTransport({
+    host: 'smtp.gmail.com', port: 465, secure: true, pool: false,
+    auth: { user, pass }, connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000,
+  });
+  try {
+    await transport.sendMail({ from: `OperStack <${user}>`, to: email, subject: t.subject, text, html });
+    return true;
+  } catch (e) {
+    console.error(`  письмо о неудаче не ушло: ${e.message}`);
+    return false;
+  } finally { transport.close(); }
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
@@ -158,7 +220,10 @@ async function main() {
       // одну вторую попытку через пять минут, на следующем прогоне очереди. Ровно одну, иначе
       // на сломанной заявке человек получит пять писем об одной ошибке.
       if (retried.has(item.uid)) {
-        await telegram(`❌ Отчёт для ${job.email} не ушёл и со второй попытки. Заявка закрыта, ${job.url}.`);
+        // Молчание здесь и есть самая дорогая поломка: человек оставил почту и решит, что
+        // бесплатный продукт не работает. Говорим ему правду, а Максиму пишем в Telegram.
+        const told = await sendFailureNote(job);
+        await telegram(`❌ Отчёт для ${job.email} не ушёл и со второй попытки, ${job.url}. ${told ? 'Человеку написали, что не вышло.' : 'СКАЗАТЬ ЧЕЛОВЕКУ НЕ УДАЛОСЬ.'}`);
         await close();
       } else {
         await telegram(`⚠️ Отчёт для ${job.email} не ушёл (${job.url}). Повторим через пять минут.`);
