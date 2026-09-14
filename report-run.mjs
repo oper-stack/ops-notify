@@ -136,6 +136,8 @@ const COPY = {
     moreHead: 'Want every problem, not just the first one?',
     moreBody: 'The site fix list reads up to twenty pages instead of five and turns every finding into a task you can hand to anyone.',
     moreCta: 'The site fix list, 9 USD',
+    offerWas: '29 USD',
+    offerNow: '19 USD',
     offerEyebrow: '24 hours only',
     offerTitle: 'You and three rivals, watched for a month',
     offerPoints: [
@@ -166,11 +168,19 @@ const COPY = {
     moreHead: 'Хотите все проблемы, а не только первую?',
     moreBody: 'Список задач читает до двадцати страниц вместо пяти и превращает каждую находку в задачу, которую можно отдать кому угодно.',
     moreCta: 'Список задач, 800 ₽',
-    offerEyebrow: '',
-    offerTitle: '',
-    offerPoints: [],
-    offerCta: '',
-    offerFoot: '',
+    offerWas: '2 500 ₽',
+    offerNow: '1 500 ₽',
+    offerEyebrow: 'Только сутки',
+    offerTitle: 'Вы и три конкурента, месяц наблюдения',
+    offerPoints: [
+      'Всё из отчёта за 800 ₽, по вашему сайту',
+      'Те же замеры по трём конкурентам, в одной таблице рядом с вами',
+      'Четыре перепроверки вашего сайта, раз в неделю письмом',
+      'Видно, что сдвинулось от ваших правок, а что нет',
+      'Разовая оплата, подписки не остаётся, отменять нечего',
+    ],
+    offerCta: 'Забрать за 1 500 ₽',
+    offerFoot: 'Счёт придёт письмом сразу, оплата переводом. Через сутки ссылка снова станет стоить 2 500, и вернуть её нельзя. Одно предложение на один адрес.',
     nextStepFree: '',
     whatIsIt:
       'Он измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не удалось, так и написано и сказано почему.',
@@ -221,11 +231,15 @@ function unsubUrlFor(email, lang) {
 
 function offerUrlFor(email, lang) {
   const secret = env('KIT_DOWNLOAD_SECRET');
+  // На английском ссылка ведёт на скрытый тариф Whop, и без него предложения быть не может.
+  // На русском кассы нет вовсе: ссылка ведёт на обычное оформление заказа, а скидку
+  // подтверждает подпись, поэтому никакой переменной здесь не нужно.
   const plan = env('WHOP_CHECKOUT_RIVALS_19');
-  if (!secret || !plan || lang === 'ru') return null;
+  if (!secret || (lang !== 'ru' && !plan)) return null;
   const claims = { email: String(email).trim().toLowerCase(), exp: Math.floor(Date.now() / 1000) + 24 * 3600 };
   const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  return `https://oper-stack.com/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+  const site = lang === 'ru' ? 'https://oper-stack.ru' : 'https://oper-stack.com';
+  return `${site}/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
 function buildLetter({ host, lang, scores, comparison, free = false, score = null, offerUrl = null, unsubUrl = null, firstTask = null }) {
@@ -252,7 +266,7 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
        `${t.moreCta}: ${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`,
        ...(offerUrl
          ? ['', t.offerTitle, ...t.offerPoints.map((x) => `  - ${x}`), '',
-            `29 USD -> 19 USD. ${t.offerFoot}`, offerUrl]
+            `${t.offerWas} -> ${t.offerNow}. ${t.offerFoot}`, offerUrl]
          : []),
        '', t.sign,
        ...(unsubUrl ? [`${lang === 'ru' ? 'Не нужны письма? Одно нажатие, и мы перестанем' : 'Not interested? One click and we stop'}: ${unsubUrl}`] : [])]
@@ -296,8 +310,8 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
                 eyebrow: t.offerEyebrow,
                 title: t.offerTitle,
                 points: t.offerPoints,
-                was: '29 USD',
-                now: '19 USD',
+                was: t.offerWas,
+                now: t.offerNow,
                 href: offerUrl,
                 cta: `${t.offerCta} →`,
                 footnote: t.offerFoot,
