@@ -114,7 +114,11 @@ async function main() {
         if (!to.length || !to.every(isOwn)) continue;
         // Адрес с меткой это всегда проверка: ни темы разбирать, ни выдерживать запас не нужно.
         // Запас существует ради очередей, а на info+test@ заявки не приходят по определению.
-        if (!to.every(isTagged)) {
+        //
+        // Достаточно одного адреса с меткой среди наших: письма о выдаче товара уходят покупателю
+        // и в копию на accounts@, и если проверочный адрес стоит рядом с нашим, это всё равно
+        // проверка. Настоящий покупатель рядом с info+test@ не окажется никогда.
+        if (!to.some(isTagged)) {
           if (new Date(msg.internalDate).getTime() > cutoff) continue;
           if (queued.has(msg.uid)) continue;
           if (KEEP_SUBJECT.some((re) => re.test(subject)) || KEEP_MONEY.test(subject)) continue;
