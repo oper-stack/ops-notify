@@ -87,10 +87,14 @@ export const findings = (items) =>
   </table>`;
 
 /** Задача целиком: «сейчас», «что сделать», «как проверить». */
-export const taskBlock = (task) =>
+/** Подписи внутри задачи идут на языке письма: в русском письме английское «Now» смотрится
+ *  как недоделка, а текстовая версия того же письма давно пишет «Сейчас». */
+export const taskBlock = (task, lang = 'en') =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">
     <tr><td bgcolor="#FFFFFF" style="padding:20px 22px;border-left:4px solid ${C.teal};border-radius:0 10px 10px 0">
-      ${[['Now', task.now], ['What to do', task.task], ['How to check', task.verify]]
+      ${(lang === 'ru'
+        ? [['Сейчас', task.now], ['Что сделать', task.task], ['Как проверить', task.verify]]
+        : [['Now', task.now], ['What to do', task.task], ['How to check', task.verify]])
         .filter(([, v]) => v)
         .map(([k, v]) => `<p style="margin:0 0 12px;font-family:${FONT};font-size:15px;line-height:1.5;color:${C.text}"><strong style="color:${C.teal}">${k}:</strong> ${esc(v)}</p>`).join('')}
       ${task.rule ? `<p style="margin:0;font-family:${FONT};font-size:13px;line-height:1.45;color:${C.dim}">${esc(task.rule)}</p>` : ''}
