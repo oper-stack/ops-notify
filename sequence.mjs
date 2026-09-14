@@ -12,6 +12,36 @@
  */
 
 const SITE = 'https://oper-stack.com';
+const MCP = 'https://oper-stack.com/api/mcp/';
+
+/**
+ * Врезка про наш адрес для ИИ-помощников.
+ *
+ * Почему её нет в первом письме. Первое письмо открывают почти все, и у него одна работа:
+ * отдать обещанное и сделать предложение. Это самое дорогое внимание, которое у нас есть, и
+ * тратить его на бесплатную вещь, которая не приносит денег, нельзя.
+ *
+ * Почему она стоит в третьем и в письме агентству. Третье письмо про пользу без продажи, и
+ * это ровно такая польза. А агентству сравнение чужих сайтов одной фразой это его работа, и
+ * врезка стоит рядом с подпиской за 39, которая эту же работу делает под их брендом.
+ *
+ * Настоящая задача этой штуки в воронке не привести человека, а удержать: это единственное
+ * наше, чем пользуются много раз и без нас. Поэтому она внизу писем, а не наверху.
+ */
+function mcpBlockText(lines) {
+  return ['', 'One more thing, free and unrelated to anything you buy.', '',
+    ...lines, '',
+    `Paste this into the settings of Claude, ChatGPT or Cursor once: ${MCP}`,
+    'Nothing to install, no account, no payment. The trailing slash matters.',
+    `Setup for each program, step by step: ${SITE}/mcp/`];
+}
+function mcpBlockHtml(lead) {
+  return `<div style="margin:26px 0 0;padding:18px 20px;background:#E9F1EF;border-radius:10px">
+    <p style="margin:0 0 10px;font-size:15px;line-height:1.5;color:#14181C"><strong>One more thing, free and unrelated to anything you buy.</strong> ${lead}</p>
+    <p style="margin:0 0 10px;font-size:15px;line-height:1.5;color:#14181C">Paste <code style="background:#fff;padding:2px 6px;border-radius:4px;font-size:14px">${MCP}</code> into the settings of Claude, ChatGPT or Cursor once. Nothing to install, no account, no payment. The trailing slash matters.</p>
+    <p style="margin:0;font-size:14px;line-height:1.5;color:#5A6470"><a href="${SITE}/mcp/" style="color:#1A8A7D">Setup for each program, step by step</a></p>
+  </div>`;
+}
 
 /** Обёртка письма: тело плюс подпись и отписка. Отписка обязана быть в каждом письме. */
 function wrap({ subject, bodyText, bodyHtml, unsubUrl }) {
@@ -80,6 +110,10 @@ export function letter3({ host, unsubUrl }) {
       `This is the kind of thing an agency writes on page nine of a 2,000 USD audit. We would rather you just knew it.`,
       '',
       `Every problem we found on your site, turned into a task you can hand to anyone: ${SITE}/products/site-report/ (9 USD)`,
+      ...mcpBlockText([
+        'If you already use Claude, ChatGPT or Cursor, they can run this check for you inside the window you work in.',
+        'You just write in plain words: look at my site, compare me with these three, how many AI visits did I get this month.',
+      ]),
     ],
     bodyHtml: [
       '<p>One thing worth knowing, whether or not you ever buy anything from us.</p>',
@@ -88,6 +122,7 @@ export function letter3({ host, unsubUrl }) {
       `<p><strong>How to check it on ${host} in a minute:</strong> open any page that matters, read only the first paragraph, and ask whether a stranger would get a usable answer from it alone. If not, that page is invisible to an answer engine no matter how good the rest is.</p>`,
       '<p style="color:#666;font-size:14px">This is the kind of thing an agency writes on page nine of a 2,000 USD audit. We would rather you just knew it.</p>',
       `<p>Every problem we found on your site, turned into a task you can hand to anyone: <a href="${SITE}/products/site-report/">the site fix list</a>, 9 USD.</p>`,
+      mcpBlockHtml('If you already use Claude, ChatGPT or Cursor, they can run this check inside the window you work in. You write in plain words: look at my site, compare me with these three, how many AI visits did I get this month.'),
     ],
     unsubUrl,
   });
@@ -105,12 +140,17 @@ export function letter4Agency({ sites, unsubUrl }) {
       'The agency plan produces the measured report with your logo on the cover, your colour through the document and your agency named as the author. No cap on sites, reports or clients, and no share of what you charge them. 39 USD a month.',
       '',
       `See it: ${SITE}/products/agency/`,
+      ...mcpBlockText([
+        'And since you check other people sites all day: Claude, ChatGPT and Cursor can do it for you, in conversation.',
+        'Compare these four client sites on the same scale. Which of them blocks AI crawlers. Did the llms.txt links survive the redesign.',
+      ]),
     ],
     bodyHtml: [
       `<p>You have run <strong>${sites} different sites</strong> through our check. So you are not auditing your own site. You are auditing someone else’s, and billing for it.</p>`,
       '<p>A technical audit is quoted at 2,000 to 7,500 USD and an AI visibility audit at 1,000 to 5,000. You know that better than we do, because it is your invoice. You also know that most of the work behind it is measuring, and measuring is the part you would rather not do by hand.</p>',
       '<p>The agency plan produces the measured report with <strong>your logo on the cover</strong>, your colour through the document and your agency named as the author. No cap on sites, reports or clients, and no share of what you charge them. <strong>39 USD a month.</strong></p>',
       btn(`${SITE}/products/agency/`, 'See the agency plan →'),
+      mcpBlockHtml('And since you check other people’s sites all day: Claude, ChatGPT and Cursor can do it for you, in conversation. «Compare these four client sites on the same scale.» «Which of them blocks AI crawlers.» «Did the llms.txt links survive the redesign.»'),
     ],
     unsubUrl,
   });
@@ -180,12 +220,17 @@ export function letter6({ host, unsubUrl }) {
       'If you ever want a person to look at it instead of a machine, that is the audit at 149 USD. If you look after other people sites, the agency plan puts your own logo on the report for 39 a month. Both are on the site, and neither needs an account.',
       '',
       'Thanks for trying it.',
+      ...mcpBlockText([
+        'The one thing worth keeping after these letters stop: our check works inside Claude, ChatGPT and Cursor.',
+        'Then you never have to remember to come back here at all.',
+      ]),
     ],
     bodyHtml: [
       '<p>This is the last of these. After it we stop writing unless you run another check or ask us something.</p>',
       `<p>A month is enough time for things to change on a site without anyone noticing: a plugin update rewrites robots.txt, a redesign drops the schema, a new section ships with no opening paragraph. <a href="${SITE}/ai-visibility/">The check</a> is free and always will be.</p>`,
       `<p>If you ever want a person to look at it instead of a machine, that is <a href="${SITE}/products/seo-audit/">the audit</a> at 149 USD. If you look after other people’s sites, <a href="${SITE}/products/agency/">the agency plan</a> puts your own logo on the report for 39 a month. Both are on the site, and neither needs an account.</p>`,
       '<p>Thanks for trying it.</p>',
+      mcpBlockHtml('The one thing worth keeping after these letters stop: our check works inside Claude, ChatGPT and Cursor, so you never have to remember to come back here at all.'),
     ],
     unsubUrl,
   });
