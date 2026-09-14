@@ -21,7 +21,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { AREAS_RU, collect, computeOverall, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
@@ -39,6 +39,16 @@ const RIVAL_BUDGET_MS = Number(val('--rival-budget=', '180')) * 1000;
 const EMAIL = val('--email=');
 /** Балл со страницы проверки, из ста. Приходит в заявке, здесь не считается. */
 const SCORE = val('--score=') === '' ? null : Number(val('--score='));
+/**
+ * Результат проверки, который человек уже видел на странице, целиком и в base64url.
+ * Отдаём его сборщику, чтобы он не мерил второй раз: два честных замера живого сайта
+ * расходятся на пару баллов, и в письме оказалось бы не то число, что на экране.
+ */
+const VISIBILITY = (() => {
+  const raw = val('--visibility=');
+  if (!raw) return null;
+  try { return JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')); } catch { return null; }
+})();
 /**
  * Ступень. free это то, что человек получает за почту после бесплатной проверки: пять страниц,
  * только замер. Список задач в неё не входит, потому что список задач это и есть товар за 9.
@@ -369,7 +379,10 @@ async function main() {
 
   const work = await mkdtemp(path.join(tmpdir(), 'operstack-report-'));
   try {
-    const raw = await collect(site, { pages: PAGES, lang: LANG, rendered: true, log: (m) => log(`  ${m}`) });
+    const raw = await collect(site, {
+      pages: PAGES, lang: LANG, rendered: true, log: (m) => log(`  ${m}`),
+      ...(VISIBILITY ? { visibility: VISIBILITY } : {}),
+    });
     // draftNarrative возвращает копию и ничего не меняет на месте: работаем с тем, что вернули,
     // иначе в PDF уедет пустой шаблон с фигурными скобками вместо текста.
     const audit = draftNarrative(raw, { lang: LANG });
@@ -419,10 +432,18 @@ async function main() {
       log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
     }
 
-    // Считаем до письма и до вёрстки, чтобы обе стороны взяли одно и то же число.
-    const overall = computeOverall(audit.checks);
-    const overallScore = Number.isFinite(overall?.score) ? overall.score : (Number.isFinite(SCORE) ? SCORE : null);
-    log(`  общий балл: ${overallScore ?? 'не посчитан'} из 100`);
+    /**
+     * Балл берём из отчёта, из того же поля, которое печатает заголовок PDF. Считать его здесь
+     * своим вызовом больше нельзя: с 0.17 балл в отчёте это балл видимости, а не взвешенная
+     * сумма шести областей, и собственный расчёт снова развёл бы письмо с вложением.
+     *
+     * Балла может не быть вовсе: движок отказывается мерить приватные адреса. Тогда письмо
+     * просто не называет цифру, а не подставляет ноль.
+     */
+    const overallScore = Number.isFinite(audit.overall?.score)
+      ? audit.overall.score
+      : (Number.isFinite(SCORE) ? SCORE : null);
+    log(`  общий балл: ${overallScore ?? 'не посчитан'} из 100 (${audit.overall?.source ?? 'источник неизвестен'})`);
 
     const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
