@@ -335,7 +335,10 @@ async function send({ to, subject, text, html, attachments = [], unsubUrl = null
       from: `OperStack <${user}>`, to, subject, text, html, attachments,
       // Почтовые программы показывают свою кнопку «отписаться», и это снижает жалобы на спам.
       // Mail.ru и Яндекс смотрят на этот заголовок отдельно от ссылки внутри письма.
-      ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: 'Unsubscribe' } } } : {}),
+      ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: 'Unsubscribe' } },
+        // Без этого заголовка кнопка в почтовой программе только открывает страницу.
+        // С ним отписка происходит в одно нажатие, и адрес принимает POST (RFC 8058).
+        headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
     });
   } finally { transport.close(); }
 }

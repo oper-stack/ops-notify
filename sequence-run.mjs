@@ -115,6 +115,9 @@ async function send({ to, subject, text, html, lang = 'en' }) {
       from: `OperStack <${user}>`, to, subject, text, html,
       // Почтовые программы показывают свою кнопку «отписаться», и это снижает жалобы на спам.
       list: { unsubscribe: { url: unsubUrl(to, lang), comment: 'Unsubscribe' } },
+      // Без этого заголовка кнопка в почтовой программе только открывает страницу. С ним
+      // отписка происходит в одно нажатие, и адрес принимает POST (RFC 8058).
+      headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     });
   } finally { transport.close(); }
 }
