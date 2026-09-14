@@ -104,6 +104,14 @@ jobs:
           KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      # Уборка идёт и здесь, а не только в задании про почту. Очередь просыпается по каждой
+      # заявке, то есть ровно тогда, когда в ящике появляется новое письмо от нас самим себе.
+      # Ждать общего расписания значит держать это письмо у владельца ящика на глазах.
+      - run: node tidy-tests.mjs
+        if: always()
+        env:
+          GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
+          GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
 
   sequence:
     # Цепочка писем после бесплатной проверки. Раз в сутки: расписание письма считается в часах
