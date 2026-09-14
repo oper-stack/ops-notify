@@ -151,11 +151,12 @@ function unsubUrl(email, lang = 'en') {
   return `${site}/api/unsubscribe/?t=${body}.${createHmac('sha256', secret()).update(body).digest('base64url')}`;
 }
 
-/** Ссылка на цену 19. Живёт четыре часа: письмо уходит за четыре часа до конца суток. */
-function offerUrl(email) {
+/** Ссылка на срочную цену. Живёт четыре часа: письмо уходит за четыре часа до конца суток. */
+function offerUrl(email, lang = 'en') {
   const claims = { email: email.trim().toLowerCase(), exp: Math.floor(Date.now() / 1000) + 4 * 3600 };
   const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  return `${SITE}/api/offer/?t=${body}.${createHmac('sha256', secret()).update(body).digest('base64url')}`;
+  const site = lang === 'ru' ? 'https://oper-stack.ru' : SITE;
+  return `${site}/api/offer/?t=${body}.${createHmac('sha256', secret()).update(body).digest('base64url')}`;
 }
 
 /* ------------------------------ расписание ------------------------------ */
@@ -182,6 +183,7 @@ function build(n, person) {
   // Русскому человеку пишем по-русски. Цены, ссылки и сравнение с агентством в русских
   // письмах свои: рынок другой, и рубли в переводе английского письма выглядели бы враньём.
   if (lang === 'ru') {
+    if (n === 2) return RU.letter2({ host, score, offerUrl: offerUrl(person.email, 'ru'), unsubUrl: unsub });
     if (n === 3) return RU.letter3({ host, unsubUrl: unsub });
     if (n === 4) return sites > 1 ? RU.letter4Agency({ sites, unsubUrl: unsub }) : RU.letter4Owner({ host, score, unsubUrl: unsub });
     if (n === 5) return RU.letter5({ host, score, unsubUrl: unsub });
@@ -200,7 +202,7 @@ function build(n, person) {
 
 async function main() {
   const offerLive = Boolean(env('WHOP_CHECKOUT_RIVALS_19'));
-  if (!offerLive) log('тариф за 19 не заведён: письмо 2 пропускаем, это не ошибка');
+  if (!offerLive) log('тариф за 19 не заведён: английское письмо 2 пропускаем, русское уходит как обычно');
 
   const rows = await readRows();
   // Один человек это одна почта, даже если он проверил пять сайтов. Берём его первый прогон
@@ -229,7 +231,9 @@ async function main() {
     const hours = (now - started) / 3600000;
     const sent = p.letters.split(',').map((s) => s.trim()).filter(Boolean);
     // Письма про цену со скидкой на русском нет: там нет мгновенной кассы, заказ идёт счётом.
-    const n = due(hours, sent, offerLive && p.lang !== 'ru');
+    // На английском письмо 2 живёт только если заведён скрытый тариф Whop. На русском кассы
+    // нет вовсе: скидку подтверждает подпись, поэтому письмо уходит всегда.
+    const n = due(hours, sent, p.lang === 'ru' ? true : offerLive);
     if (!n) continue;
 
     const person = { email: p.email, host: p.host, score: p.score, sites: p.sites.size, lang: p.lang };
