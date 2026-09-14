@@ -19,12 +19,14 @@
  * Env: GOOGLE_USER, GOOGLE_APP_PASSWORD (SMTP), TG_TOKEN, TG_CHAT_ID (необязательно).
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, draftNarrative, overallSummary, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
-import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
+import { areaTable, button, buttonLoud, emailShell, headline, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
 
 const args = process.argv.slice(2);
 const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).slice(p.length);
@@ -61,6 +63,10 @@ const DRY = has('--dry-run');
 
 const env = (k, d = '') => (process.env[k] || d).trim();
 const log = (...a) => console.log(...a);
+
+/** Оценка словом по баллу. Пороги те же, что в движке видимости: иначе старая заявка,
+ *  где приехала одна цифра, получила бы не ту оценку, что новая. */
+const gradeOf = (n) => (n >= 80 ? 'A' : n >= 65 ? 'B' : n >= 45 ? 'C' : n >= 25 ? 'D' : 'E');
 
 /** Адрес покупателя приходит из формы. Принимаем только http(s) и только настоящий хост. */
 function normaliseUrl(raw) {
@@ -252,7 +258,7 @@ function offerUrlFor(email, lang) {
   return `${site}/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
-function buildLetter({ host, lang, scores, comparison, free = false, score = null, offerUrl = null, unsubUrl = null, firstTask = null }) {
+export function buildLetter({ host, lang, scores, comparison, free = false, head = null, offerUrl = null, unsubUrl = null, firstTask = null }) {
   const t = COPY[lang];
   const ru = lang === 'ru';
   const greeting = free ? t.greetingFree : t.greeting;
@@ -261,12 +267,16 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
     .map(([area, v]) => `${lang === 'ru' ? (AREAS_RU[area] || area) : area}: ${v ?? (lang === 'ru' ? 'не измерено' : 'not measured')}`)
     .join('\n');
   const site = `https://oper-stack.${lang === 'ru' ? 'ru' : 'com'}`;
+  // Заголовок, подпись под ним и пять его областей: ровно то, что стоит на первой странице
+  // отчёта, и теми же словами. Текст приходит готовым из пакета, здесь его не сочиняют.
+  const headText = head
+    ? [`${head.label}: ${head.score} ${ru ? 'из 100' : 'of 100'} (${head.grade}).`,
+       head.note, '',
+       ...head.areas.map((x) => `  ${x.label}: ${x.score} / ${x.max}`), '']
+    : [];
   const text = free
     ? [greeting, '',
-       ...(typeof score === 'number'
-         ? [`${lang === 'ru' ? 'Итог' : 'The score'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`,
-            lang === 'ru' ? 'Та же цифра стоит на первой странице отчёта, а под ней разбор по шести областям.' : 'The same number heads the report, with the six areas broken out underneath.', '']
-         : []),
+       ...headText,
        t.measuredFree, '',
        ...(firstTask
          ? [t.firstFixHead, '', t.firstFixBody, '',
@@ -284,7 +294,11 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
        '', t.sign,
        ...(unsubUrl ? [`${lang === 'ru' ? 'Не нужны письма? Одно нажатие, и мы перестанем' : 'Not interested? One click and we stop'}: ${unsubUrl}`] : [])]
         .join('\n')
-    : [greeting, '', rows, '',
+    : [greeting, '',
+       ...headText,
+       ...(head ? [head.secondMeasure, ''] : []),
+       rows, '',
+       ...(head ? [head.secondMeasureFoot, ''] : []),
        ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
        t.whatIsIt, '', nextStep, '', t.sign].join('\n');
   // Заголовок двумя строками: домен не должен рваться посередине.
@@ -305,10 +319,9 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
     blocks: free
       ? [
           par(greeting),
-          // Балл одной строкой: ради этой цифры человек и оставлял почту, а подробности в файле.
-          ...(typeof score === 'number'
-            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Итог' : 'The score'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.<br><span style="font-size:14px;color:#5A6470">${ru ? 'Та же цифра стоит на первой странице отчёта, а под ней разбор по шести областям.' : 'The same number heads the report, with the six areas broken out underneath.'}</span></p>`]
-            : []),
+          // Ради этой цифры человек и оставлял почту. Она же стоит на первой странице отчёта,
+          // и под ней те же пять областей, которые в сумме её дают.
+          ...(head ? [headline({ host, ...head }), areaTable(head.areas)] : []),
           note(t.measuredFree),
           ...(firstTask
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.firstFixHead}</p>`,
@@ -333,7 +346,10 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
         ]
       : [
           par(greeting),
-          scoreTable(areaRows),
+          ...(head ? [headline({ host, ...head }), areaTable(head.areas)] : []),
+          ...(head ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${head.secondMeasure}</p>`] : []),
+          scoreTable(areaRows, lang),
+          ...(head ? [note(head.secondMeasureFoot)] : []),
           ...(comparison
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.rivalsHead}</p>`,
                `<div style="overflow-x:auto">${comparison.html}</div>`,
@@ -433,26 +449,23 @@ async function main() {
     }
 
     /**
-     * Балл берём из отчёта, из того же поля, которое печатает заголовок PDF. Считать его здесь
-     * своим вызовом больше нельзя: с 0.17 балл в отчёте это балл видимости, а не взвешенная
-     * сумма шести областей, и собственный расчёт снова развёл бы письмо с вложением.
+     * Заголовок письма собирает пакет, той же функцией, которой его печатает первая страница PDF.
+     * Считать балл здесь своим вызовом нельзя: с версии 0.17 балл в отчёте это балл видимости, а
+     * не взвешенная сумма шести областей, и собственный расчёт снова развёл бы письмо с вложением.
      *
-     * Балла может не быть вовсе: движок отказывается мерить приватные адреса. Тогда письмо
-     * просто не называет цифру, а не подставляет ноль.
+     * Балла может не быть вовсе: движок отказывается мерить закрытые и приватные адреса. Тогда
+     * письмо просто не называет цифру, а не подставляет ноль. Старая заявка, пролежавшая в ящике
+     * с цифрой вместо результата, тоже обслуживается: из неё собирается тот же блок, только без
+     * разбивки по областям, которой в ней нет.
      */
-    const overallScore = Number.isFinite(audit.overall?.score)
-      ? audit.overall.score
-      : (Number.isFinite(SCORE) ? SCORE : null);
-    log(`  общий балл: ${overallScore ?? 'не посчитан'} из 100 (${audit.overall?.source ?? 'источник неизвестен'})`);
+    let head = overallSummary(audit.overall, { lang: LANG });
+    if (!head && Number.isFinite(SCORE)) head = overallSummary({ score: SCORE, grade: gradeOf(SCORE), areas: [], source: 'visibility:reused' }, { lang: LANG });
+    log(`  общий балл: ${head ? head.score : 'не посчитан'} из 100 (${audit.overall?.source ?? 'источник неизвестен'})`);
 
     const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
-      // Балл считаем здесь же тем вызовом, которым его считает вёрстка PDF, и по тому же
-      // объекту проверок. Готовое поле audit.overall брать нельзя: оно снимается раньше, чем
-      // в отчёт попадают проверки из настоящего браузера, и письмо расходилось с вложением на
-      // два пункта. Одна функция, один набор проверок, один момент: разойтись нечему.
-      score: overallScore,
+      head,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
       unsubUrl,
       firstTask,
@@ -484,8 +497,16 @@ async function main() {
     }
 
     if (DRY) {
+      // Сухой прогон это и есть сверка втроём. Раньше она делалась глазами по трём разным
+      // экранам, и именно так разошлись 46, 61 и шесть из шестидесяти. Теперь три числа
+      // печатаются рядом одной строкой, и расхождение видно сразу.
+      const printed = (await readFile(htmlPath, 'utf8')).match(/overall-num[^"]*">(\d+)/);
+      const three = { движок: VISIBILITY?.score ?? null, отчёт: printed ? Number(printed[1]) : null, письмо: head ? head.score : null };
+      const same = new Set(Object.values(three).filter((v) => v !== null)).size <= 1;
+      log(`  [сухой прогон] балл: движок ${three.движок ?? '—'} | отчёт ${three.отчёт ?? '—'} | письмо ${three.письмо ?? '—'} ${same ? '✓ сходится' : '✗ РАСХОЖДЕНИЕ'}`);
       log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено`);
       log('\n' + letter.text);
+      if (!same) process.exitCode = 1;
       return;
     }
 
@@ -497,7 +518,10 @@ async function main() {
   }
 }
 
-main().catch(async (e) => {
+// Файл заодно и модуль: тест письма импортирует buildLetter и не должен запускать прогон.
+// Вызов остаётся ровно для запуска из очереди, где файл открывают как программу.
+const RUN_AS_PROGRAM = process.argv[1] && resolvePath(process.argv[1]) === fileURLToPath(import.meta.url);
+if (RUN_AS_PROGRAM) main().catch(async (e) => {
   console.error(e.message);
   // Покупатель заплатил. Если что-то сломалось, об этом должен узнать человек, а не логи.
   await notifyTelegram(`⚠️ Отчёт «${TIER}» НЕ отправлен: ${URL_IN} → ${EMAIL}. Причина: ${e.message}. ${TIER === 'free' ? 'Это бесплатная ступень, денег не брали.' : 'Сделать руками.'}`);

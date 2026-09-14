@@ -67,6 +67,41 @@ export const scoreBlock = (host, score) =>
   </table>`;
 
 /**
+ * Балл, его оценка словом и подпись под ним: ровно тот блок, что стоит на первой странице отчёта.
+ *
+ * Простым языком: человек уже видел эту цифру на странице проверки. Письмо обязано назвать её же
+ * и теми же словами объяснить, откуда она. Раньше письмо считало свою и объясняло по-своему, и
+ * получалось три числа про один сайт.
+ *
+ * Текст сюда приходит готовым из пакета (`overallSummary`), здесь его не сочиняют.
+ */
+export const headline = ({ host, label, score, grade, note: caption }) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px">
+    <tr><td align="center" bgcolor="${C.tint}" style="padding:22px 20px;border-radius:10px">
+      <div style="font-family:${FONT};font-size:13px;line-height:1.3;letter-spacing:.06em;text-transform:uppercase;color:${C.dim}">${esc(host)}</div>
+      <div style="font-family:${FONT};font-size:44px;line-height:1.1;font-weight:700;color:${C.teal};padding-top:4px">${esc(score)}<span style="font-size:20px;font-weight:400;color:${C.dim}"> / 100</span></div>
+      <div style="font-family:${FONT};font-size:15px;line-height:1.4;color:${C.text};padding-top:2px">${esc(label)}: <strong>${esc(grade)}</strong></div>
+    </td></tr>
+  </table>
+  <p style="margin:0 0 20px;font-family:${FONT};font-size:14px;line-height:1.5;color:${C.dim}">${esc(caption)}</p>`;
+
+/**
+ * Пять областей балла: в сумме они дают ровно заголовок, и читатель может сложить их руками.
+ * У каждой свой потолок, поэтому «из десяти» здесь не годится.
+ */
+export const areaTable = (areas) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">
+    ${areas.map(({ label, score, max }) => {
+      const share = max ? score / max : 0;
+      const colour = share >= 0.85 ? C.teal : share >= 0.6 ? C.amber : '#B4462F';
+      return `<tr>
+        <td style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:15px;line-height:1.35;color:${C.text}">${esc(label)}</td>
+        <td align="right" style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:15px;font-weight:700;white-space:nowrap;color:${colour}">${score} / ${max}</td>
+      </tr>`;
+    }).join('')}
+  </table>`;
+
+/**
  * Кнопка. Ячейка таблицы с цветом фона, потому что оформленная ссылка в Outlook
  * превращается в обычный синий текст.
  */
@@ -142,11 +177,11 @@ export function emailShell({ preheader, heading, blocks, unsubUrl, site }) {
  * Баллы по областям таблицей, с цветом. Человек видит результат, не открывая вложение.
  * Зелёное это хорошо, жёлтое средне, красное плохо: цвет считается, а не проставляется руками.
  */
-export const scoreTable = (rows) =>
+export const scoreTable = (rows, lang = 'en') =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">
     ${rows.map(([label, v]) => {
       const colour = v === null ? C.dim : v >= 9 ? C.teal : v >= 7 ? C.amber : '#B4462F';
-      const shown = v === null ? 'not measured' : `${v} / 10`;
+      const shown = v === null ? (lang === 'ru' ? 'не измерялось' : 'not measured') : `${v} / 10`;
       return `<tr>
         <td style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:15px;line-height:1.35;color:${C.text}">${esc(label)}</td>
         <td align="right" style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:15px;font-weight:700;white-space:nowrap;color:${colour}">${shown}</td>

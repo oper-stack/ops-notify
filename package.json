@@ -8,13 +8,15 @@
     "mail": "node notify-mail.mjs",
     "mail:dry": "node notify-mail.mjs --dry-run",
     "digest": "node digest.mjs",
-    "digest:dry": "node digest.mjs --dry-run"
+    "digest:dry": "node digest.mjs --dry-run",
+    "test": "node test-letter.mjs",
+    "verify:funnel": "node verify-funnel.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@operstack/audit": "^0.17.2",
+    "@operstack/audit": "^0.18.0",
     "imapflow": "^1.0.190",
     "nodemailer": "^10.0.8"
   }
