@@ -321,7 +321,7 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
   return { subject: t.subject(host), text, html };
 }
 
-async function send({ to, subject, text, html, attachments = [] }) {
+async function send({ to, subject, text, html, attachments = [], unsubUrl = null }) {
   const user = env('GOOGLE_USER');
   const pass = env('GOOGLE_APP_PASSWORD');
   if (!user || !pass) throw new Error('нет GOOGLE_USER или GOOGLE_APP_PASSWORD');
@@ -331,7 +331,12 @@ async function send({ to, subject, text, html, attachments = [] }) {
     connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000,
   });
   try {
-    await transport.sendMail({ from: `OperStack <${user}>`, to, subject, text, html, attachments });
+    await transport.sendMail({
+      from: `OperStack <${user}>`, to, subject, text, html, attachments,
+      // Почтовые программы показывают свою кнопку «отписаться», и это снижает жалобы на спам.
+      // Mail.ru и Яндекс смотрят на этот заголовок отдельно от ссылки внутри письма.
+      ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: 'Unsubscribe' } } } : {}),
+    });
   } finally { transport.close(); }
 }
 
@@ -393,11 +398,12 @@ async function main() {
       log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
     }
 
+    const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
       host, lang: LANG, scores: audit.scores, comparison, free: FREE,
       score: Number.isFinite(SCORE) ? SCORE : null,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
-      unsubUrl: FREE ? unsubUrlFor(EMAIL, LANG) : null,
+      unsubUrl,
       firstTask,
     });
     const pdf = await readFile(result.pdf);
@@ -432,7 +438,7 @@ async function main() {
       return;
     }
 
-    await send({ to: EMAIL, ...letter, attachments });
+    await send({ to: EMAIL, ...letter, attachments, unsubUrl });
     log(`  письмо отправлено: ${EMAIL} (вложений: ${attachments.length})`);
     await notifyTelegram(`📄 ${FREE ? 'Бесплатный отчёт' : 'Отчёт'} отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
   } finally {
