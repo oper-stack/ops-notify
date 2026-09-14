@@ -87,11 +87,21 @@ const btn = (href, label) => button(href, label);
  * Уходит только если скрытый тариф за 19 действительно заведён: обещать цену, которой нет,
  * нельзя. Пока тарифа нет, письмо просто не отправляется, и человек сразу получает третье.
  */
+/**
+ * Есть ли балл, который можно назвать вслух.
+ *
+ * Простым языком: в таблице балл берётся из прогона проверки и обычно на месте. Но строку могли
+ * поправить руками, а запись в таблицу могла не дойти. Тогда в холодное письмо ушло бы
+ * «набрал  из 100», и человек прочитал бы это как небрежность, а не как сбой. Балла нет,
+ * значит предложение строится без цифры.
+ */
+const said = (score) => { const s = String(score ?? '').trim(); return s !== '' && Number.isFinite(Number(s)); };
+
 export function letter2({ host, score, offerUrl, unsubUrl }) {
   return wrap({
     subject: 'Four hours left on the 19',
     bodyText: [
-      `Yesterday ${host} scored ${score} of 100, and we sent you everything the check found.`,
+      said(score) ? `Yesterday ${host} scored ${score} of 100, and we sent you everything the check found.` : `Yesterday we checked ${host} and sent you everything the check found.`,
       '',
       'The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.',
       '',
@@ -102,7 +112,7 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
       'For scale: an agency that watches AI visibility for you charges 2,000 to 15,000 USD a month, on a contract you have to end. This is once, for a month, and there is nothing to cancel.',
     ],
     bodyHtml: [
-      `<p>Yesterday <strong>${host}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>`,
+      said(score) ? `<p>Yesterday <strong>${host}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>` : `<p>Yesterday we checked <strong>${host}</strong> and sent you everything the check found.</p>`,
       '<p>The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.</p>',
       '<p>It is 29 USD. <strong>For four more hours it is 19</strong>, and then this link goes back to 29 and does not come back.</p>',
       btn(offerUrl, 'Take the full report at 19 USD →'),
@@ -184,7 +194,7 @@ export function letter4Owner({ host, score, unsubUrl }) {
   return wrap({
     subject: 'Your numbers, read by a person',
     bodyText: [
-      `Everything you have had from us so far was measured by a machine: ${host} scored ${score} of 100, and here is the list.`,
+      said(score) ? `Everything you have had from us so far was measured by a machine: ${host} scored ${score} of 100, and here is the list.` : `Everything you have had from us so far was measured by a machine: it read ${host}, and here is the list.`,
       '',
       'What a machine cannot do is tell you what those numbers mean for your business, and in what order to close them. A page that fails three checks but brings you no buyers is not the place to start.',
       '',
@@ -195,7 +205,7 @@ export function letter4Owner({ host, score, unsubUrl }) {
       `Book it: ${SITE}/products/seo-audit/`,
     ],
     bodyHtml: [
-      `<p>Everything you have had from us so far was measured by a machine: <strong>${host}</strong> scored <strong>${score} of 100</strong>, and here is the list.</p>`,
+      said(score) ? `<p>Everything you have had from us so far was measured by a machine: <strong>${host}</strong> scored <strong>${score} of 100</strong>, and here is the list.</p>` : `<p>Everything you have had from us so far was measured by a machine: it read <strong>${host}</strong>, and here is the list.</p>`,
       '<p>What a machine cannot do is tell you what those numbers mean for your business, and in what order to close them. A page that fails three checks but brings you no buyers is not the place to start.</p>',
       '<p>That is the audit: a person reads every finding on your site and writes what it means for you and what to do first. <strong>149 USD</strong> for the first ten, then 249, and it lands in one to three working days, five at most.</p>',
       '<p style="color:#666;font-size:14px">Agencies sell this as a one-off at 3,000 to 15,000 USD, or fold it into a retainer from 2,000 a month. The difference is not the person. It is that the measuring behind it was already done, by the same tool you have been using for free.</p>',
@@ -210,7 +220,7 @@ export function letter5({ host, score, unsubUrl }) {
   return wrap({
     subject: `Two weeks on: has ${host} moved?`,
     bodyText: [
-      `Two weeks ago ${host} scored ${score} of 100.`,
+      said(score) ? `Two weeks ago ${host} scored ${score} of 100.` : `Two weeks ago we checked ${host}.`,
       '',
       'Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.',
       '',
@@ -221,7 +231,7 @@ export function letter5({ host, score, unsubUrl }) {
       `If you want to watch it properly rather than remember to check: the full report puts you beside three rivals and re-checks you every week for a month. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
     ],
     bodyHtml: [
-      `<p>Two weeks ago <strong>${host}</strong> scored <strong>${score} of 100</strong>.</p>`,
+      said(score) ? `<p>Two weeks ago <strong>${host}</strong> scored <strong>${score} of 100</strong>.</p>` : `<p>Two weeks ago we checked <strong>${host}</strong>.</p>`,
       '<p>Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.</p>',
       btn(`${SITE}/ai-visibility/`, 'Run the check again →'),
       '<p>If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.</p>',

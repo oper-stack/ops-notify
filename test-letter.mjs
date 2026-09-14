@@ -91,5 +91,31 @@ for (const lang of ['ru', 'en']) {
   ok('старая заявка: областей не выдумываем', !/\/ 25/.test(text));
 }
 
+// ---- цепочка писем после бесплатной проверки
+//
+// Цифру в цепочке берут из таблицы, а её строку могли поправить руками или запись могла не
+// дойти. «Вчера example.com набрал  из 100» в холодном письме читается как небрежность, и
+// второй раз человек не откроет. Поэтому без цифры предложение строится иначе, а не ломается.
+{
+  const EN = await import('./sequence.mjs');
+  const RU = await import('./sequence.ru.mjs');
+  const opts = { host: 'example.com', offerUrl: 'https://oper-stack.com/api/offer/?t=x', unsubUrl: 'https://oper-stack.com/api/unsubscribe/?t=x' };
+
+  for (const [lang, M] of [['en', EN], ['ru', RU]]) {
+    for (const [name, make] of [['2', M.letter2], ['4', M.letter4Owner], ['5', M.letter5]]) {
+      const withScore = make({ ...opts, score: '46' });
+      ok(`цепочка ${lang}/${name}: балл назван`, /46/.test(withScore.text) && /46/.test(withScore.html));
+
+      for (const empty of ['', ' ', undefined, null, 'не измерено']) {
+        const out = make({ ...opts, score: empty });
+        const broken = /(набрал|scored)\s+(из 100|of 100)|\s(из|of) 100/.test(out.text)
+          || /undefined|null|NaN/.test(out.text) || /undefined|null|NaN/.test(out.html);
+        ok(`цепочка ${lang}/${name}: без балла предложение целое (${JSON.stringify(empty)})`, !broken);
+        ok(`цепочка ${lang}/${name}: сайт всё равно назван (${JSON.stringify(empty)})`, out.text.includes('example.com'));
+      }
+    }
+  }
+}
+
 if (bad) { console.error(`\n${bad} тест(ов) упало`); process.exit(1); }
 console.log('\nписьмо и отчёт несут один балл');
