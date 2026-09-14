@@ -210,7 +210,15 @@ function oneTaskParts(markdown, lang) {
     const m = markdown.match(new RegExp(`\\*\\*${label}:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\n|$)`));
     return m ? m[1].trim().replace(/\s+/g, ' ') : '';
   };
-  const now = grab(L.now);
+  /**
+   * Ноль в замере это не «мало», это «нет вообще». Генератор отдаёт «0 знаков», и человек в
+   * письме читает обрывок: непонятно, чего именно нет. Пишем словами.
+   *
+   * Это заплатка на нашей стороне: в PDF та же строка приходит из генератора и останется
+   * цифрой, пока он не выйдет новой версией. Чинить генератор отсюда нельзя, он продуктовый.
+   */
+  const zero = lang === 'ru' ? 'пусто, ничего не заполнено' : 'empty, nothing filled in';
+  const now = /^0\s+\D/.test(grab(L.now)) ? zero : grab(L.now);
   const task = grab(L.task);
   const verify = grab(L.verify);
   if (!now || !task) return null;
