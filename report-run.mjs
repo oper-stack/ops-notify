@@ -334,11 +334,12 @@ async function send({ to, subject, text, html, attachments = [], unsubUrl = null
     await transport.sendMail({
       from: `OperStack <${user}>`, to, subject, text, html, attachments,
       // Почтовые программы показывают свою кнопку «отписаться», и это снижает жалобы на спам.
+      // Заголовка List-Unsubscribe-Post здесь намеренно нет: он обещает отписку в одно нажатие,
+      // а почтовая служба шлёт на неё POST без заголовка Origin, и встроенная защита Astro такой
+      // запрос отклоняет с кодом 403 (проверено на живом 14.09.2026). Обещать то, что вернёт
+      // ошибку, хуже, чем не обещать: кнопка и так работает, просто открывает страницу.
       // Mail.ru и Яндекс смотрят на этот заголовок отдельно от ссылки внутри письма.
-      ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: 'Unsubscribe' } },
-        // Без этого заголовка кнопка в почтовой программе только открывает страницу.
-        // С ним отписка происходит в одно нажатие, и адрес принимает POST (RFC 8058).
-        headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } } : {}),
+      ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: 'Unsubscribe' } } } : {}),
     });
   } finally { transport.close(); }
 }
