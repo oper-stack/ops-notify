@@ -23,7 +23,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AREAS_RU, collect, draftNarrative, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
-import { button, emailShell, note, p as par, scoreTable } from './email-shell.mjs';
+import { createHmac } from 'node:crypto';
+import { button, buttonLoud, emailShell, note, offerCard, p as par, scoreTable } from './email-shell.mjs';
 
 const args = process.argv.slice(2);
 const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).slice(p.length);
@@ -36,6 +37,8 @@ const RIVAL_PAGES = Number(val('--rival-pages=', '8')) || 8;
 /** Столько времени даём одному конкуренту. Дальше он в сравнение просто не попадает. */
 const RIVAL_BUDGET_MS = Number(val('--rival-budget=', '180')) * 1000;
 const EMAIL = val('--email=');
+/** Балл со страницы проверки, из ста. Приходит в заявке, здесь не считается. */
+const SCORE = val('--score=') === '' ? null : Number(val('--score='));
 /**
  * Ступень. free это то, что человек получает за почту после бесплатной проверки: пять страниц,
  * только замер. Список задач в неё не входит, потому что список задач это и есть товар за 9.
@@ -126,9 +129,23 @@ const COPY = {
   en: {
     subject: (host) => `Your OperStack report: ${host}`,
     greeting: 'Your report is attached as a PDF.',
-    greetingFree: 'Your free report is attached as a PDF. It measures five pages of your site.',
-    nextStepFree:
-      'This free report measures five pages and stops there. The site fix list at 9 USD reads up to twenty and turns every problem above into a task written in plain words: what your site does now, what to change, how to check it is done. https://oper-stack.com/products/site-report/',
+    greetingFree: 'Two files are attached: the report on your site, and the first fix written out in full. Open them, then come back to this email.',
+    measuredFree: 'It is measured, not written by a person: every number comes from your live pages, and where something could not be measured the report says so and why.',
+    moreHead: 'Want every problem, not just the first one?',
+    moreBody: 'The site fix list reads up to twenty pages instead of five and turns every finding into a task you can hand to anyone.',
+    moreCta: 'The site fix list, 9 USD',
+    offerEyebrow: '24 hours only',
+    offerTitle: 'You and three rivals, watched for a month',
+    offerPoints: [
+      'Everything in the 9 USD report, on your own site',
+      'The same measurement on up to three rivals, in one table beside yours',
+      'Four weekly re-checks of your site, by email',
+      'You see what your fixes actually moved, and what they did not',
+      'One payment, no subscription, nothing to cancel',
+    ],
+    offerCta: 'Take it at 19 USD',
+    offerFoot: 'After 24 hours this link costs 29 again, and it does not come back. One offer per address.',
+    nextStepFree: '',
     whatIsIt:
       'It is measured, not written by a person: every number in it comes from your live pages, and where something could not be measured the report says so and why.',
     nextStep:
@@ -140,9 +157,17 @@ const COPY = {
   ru: {
     subject: (host) => `Отчёт OperStack: ${host}`,
     greeting: 'Отчёт во вложении, PDF.',
-    greetingFree: 'Бесплатный отчёт во вложении, PDF. В нём измерены пять страниц вашего сайта.',
-    nextStepFree:
-      'Бесплатный отчёт меряет пять страниц и на этом заканчивается. Список задач за 9 долларов читает до двадцати и превращает каждую проблему в задачу обычными словами: что на сайте сейчас, что поменять, как проверить. https://oper-stack.com/products/site-report/',
+    greetingFree: 'Во вложении два файла: отчёт по вашему сайту и первая правка, расписанная целиком. Откройте их, посмотрите и возвращайтесь к этому письму.',
+    measuredFree: 'Отчёт измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
+    moreHead: 'Хотите все проблемы, а не только первую?',
+    moreBody: 'Список задач читает до двадцати страниц вместо пяти и превращает каждую находку в задачу, которую можно отдать кому угодно.',
+    moreCta: 'Список задач, 800 ₽',
+    offerEyebrow: '',
+    offerTitle: '',
+    offerPoints: [],
+    offerCta: '',
+    offerFoot: '',
+    nextStepFree: '',
     whatIsIt:
       'Он измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не удалось, так и написано и сказано почему.',
     nextStep:
@@ -153,7 +178,24 @@ const COPY = {
   },
 };
 
-function buildLetter({ host, lang, scores, comparison, free = false }) {
+/** Отписка: та же подпись, что у сайта, поэтому ссылка сходится с его страницей. */
+function unsubUrlFor(email) {
+  const secret = env('KIT_DOWNLOAD_SECRET');
+  if (!secret) return null;
+  const body = Buffer.from(String(email).trim().toLowerCase(), 'utf8').toString('base64url');
+  return `https://oper-stack.com/api/unsubscribe/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+}
+
+function offerUrlFor(email, lang) {
+  const secret = env('KIT_DOWNLOAD_SECRET');
+  const plan = env('WHOP_CHECKOUT_RIVALS_19');
+  if (!secret || !plan || lang === 'ru') return null;
+  const claims = { email: String(email).trim().toLowerCase(), exp: Math.floor(Date.now() / 1000) + 24 * 3600 };
+  const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  return `https://oper-stack.com/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
+}
+
+function buildLetter({ host, lang, scores, comparison, free = false, score = null, offerUrl = null, unsubUrl = null }) {
   const t = COPY[lang];
   const ru = lang === 'ru';
   const greeting = free ? t.greetingFree : t.greeting;
@@ -161,9 +203,23 @@ function buildLetter({ host, lang, scores, comparison, free = false }) {
   const rows = Object.entries(scores || {})
     .map(([area, v]) => `${lang === 'ru' ? (AREAS_RU[area] || area) : area}: ${v ?? (lang === 'ru' ? 'не измерено' : 'not measured')}`)
     .join('\n');
-  const text = [greeting, '', rows, '',
-    ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
-    t.whatIsIt, '', nextStep, '', t.sign].join('\n');
+  const site = `https://oper-stack.${lang === 'ru' ? 'ru' : 'com'}`;
+  const text = free
+    ? [greeting, '',
+       ...(typeof score === 'number' ? [`${lang === 'ru' ? 'Итог' : 'The score'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`, ''] : []),
+       t.measuredFree, '',
+       `${t.moreHead} ${t.moreBody}`,
+       `${t.moreCta}: ${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`,
+       ...(offerUrl
+         ? ['', t.offerTitle, ...t.offerPoints.map((x) => `  - ${x}`), '',
+            `29 USD -> 19 USD. ${t.offerFoot}`, offerUrl]
+         : []),
+       '', t.sign,
+       ...(unsubUrl ? [`${lang === 'ru' ? 'Не нужны письма? Одно нажатие, и мы перестанем' : 'Not interested? One click and we stop'}: ${unsubUrl}`] : [])]
+        .join('\n')
+    : [greeting, '', rows, '',
+       ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
+       t.whatIsIt, '', nextStep, '', t.sign].join('\n');
   // Заголовок двумя строками: домен не должен рваться посередине.
   const heading = ru
     ? ['Ваш отчёт по сайту', host]
@@ -174,23 +230,50 @@ function buildLetter({ host, lang, scores, comparison, free = false }) {
   ]);
   const html = emailShell({
     site: lang,
+    unsubUrl,
     preheader: free
-      ? (ru ? 'Бесплатный отчёт во вложении' : 'Your free report is attached')
+      ? (ru ? 'Отчёт во вложении: что нашли и с чего начинать' : 'Your report is attached: what we found and where to start')
       : (ru ? 'Отчёт и список задач во вложении' : 'Your report and task list are attached'),
     heading,
-    blocks: [
-      par(greeting),
-      scoreTable(areaRows),
-      ...(comparison
-        ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.rivalsHead}</p>`,
-           `<div style="overflow-x:auto">${comparison.html}</div>`,
-           note(t.rivalsNote)]
-        : []),
-      par(t.whatIsIt),
-      par(nextStep),
-    ],
+    blocks: free
+      ? [
+          par(greeting),
+          // Балл одной строкой: ради этой цифры человек и оставлял почту, а подробности в файле.
+          ...(typeof score === 'number'
+            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Итог' : 'The score'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.</p>`]
+            : []),
+          note(t.measuredFree),
+          '<hr style="border:0;border-top:1px solid #CFC8BA;margin:24px 0">',
+          par(`<strong>${t.moreHead}</strong> ${t.moreBody}`),
+          button(`${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`, `${t.moreCta} →`, 'quiet'),
+          ...(offerUrl
+            ? [offerCard({
+                eyebrow: t.offerEyebrow,
+                title: t.offerTitle,
+                points: t.offerPoints,
+                was: '29 USD',
+                now: '19 USD',
+                href: offerUrl,
+                cta: `${t.offerCta} →`,
+                footnote: t.offerFoot,
+              })]
+            : []),
+        ]
+      : [
+          par(greeting),
+          scoreTable(areaRows),
+          ...(comparison
+            ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.rivalsHead}</p>`,
+               `<div style="overflow-x:auto">${comparison.html}</div>`,
+               note(t.rivalsNote)]
+            : []),
+          par(t.whatIsIt),
+          par(nextStep),
+        ],
   });
-  return { subject: free ? `${t.subject(host)} (free)` : t.subject(host), text, html };
+  // Пометки «free» в теме больше нет: это единственное письмо, которое человек получает
+  // после проверки, и слово «бесплатный» в теме обесценивает то, что внутри.
+  return { subject: t.subject(host), text, html };
 }
 
 async function send({ to, subject, text, html, attachments = [] }) {
@@ -256,7 +339,12 @@ async function main() {
     const comparison = rivals.length ? buildComparison(audit, rivals, LANG) : null;
     if (comparison) log(`  сравнение готово: вы и ${rivals.length}`);
 
-    const letter = buildLetter({ host, lang: LANG, scores: audit.scores, comparison, free: FREE });
+    const letter = buildLetter({
+      host, lang: LANG, scores: audit.scores, comparison, free: FREE,
+      score: Number.isFinite(SCORE) ? SCORE : null,
+      offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
+      unsubUrl: FREE ? unsubUrlFor(EMAIL) : null,
+    });
     const pdf = await readFile(result.pdf);
     log(`  PDF готов: ${(pdf.length / 1024).toFixed(0)} КБ`);
 
@@ -269,7 +357,18 @@ async function main() {
      * не звал. В бесплатную ступень задачи не входят: иначе за 9 платить не за что.
      */
     const attachments = [{ filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' }];
-    if (!FREE) {
+    if (FREE) {
+      // Одна задача, та, что сильнее всего двигает балл. Остальные это товар за 9.
+      const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
+      if (one && one.trim()) {
+        attachments.push({
+          filename: `${LANG === 'ru' ? 'pervaya-zadacha' : 'first-fix'}-${host.replace(/[^a-z0-9.-]/gi, '_')}.md`,
+          content: Buffer.from(one, 'utf8'),
+          contentType: 'text/markdown; charset=utf-8',
+        });
+        log(`  первая задача готова: ${(one.length / 1024).toFixed(1)} КБ`);
+      }
+    } else {
       const tasks = renderAgentPrompts(audit, { lang: LANG });
       if (tasks && tasks.trim()) {
         attachments.push({

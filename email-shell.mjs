@@ -158,3 +158,41 @@ export const keyBlock = (title, value) =>
       <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;line-height:1.5;color:${C.text};word-break:break-all;padding-top:6px">${esc(value)}</div>
     </td></tr>
   </table>`;
+
+/** Широкая кнопка: ею отмечается главное действие письма, её нельзя не заметить. */
+export const buttonLoud = (href, label) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 0">
+    <tr><td align="center" bgcolor="#14685E" style="border-radius:10px">
+      <a href="${href}" style="display:block;padding:18px 20px;font-family:${FONT};font-size:18px;line-height:1.3;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:10px">${esc(label)}</a>
+    </td></tr>
+  </table>`;
+
+/**
+ * Карточка срочного предложения: рамка, список того, что человек получит, старая цена
+ * зачёркнута, новая крупно, широкая кнопка.
+ *
+ * Оформление здесь нарочно ярче остального письма, но срок в нём настоящий: ссылка правда
+ * перестаёт работать, и про «одно предложение на один адрес» сказано словами. Без этого
+ * зачёркнутая цена была бы приёмом, а не фактом.
+ */
+export const offerCard = ({ eyebrow, title, points, was, now, href, cta, footnote }) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0">
+    <tr><td bgcolor="#FFF6E4" style="padding:24px 22px;border-radius:12px;border:2px solid ${C.amber}">
+      <p style="margin:0 0 6px;font-family:${FONT};font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:#8A6410">${esc(eyebrow)}</p>
+      <p style="margin:0 0 14px;font-family:${FONT};font-size:21px;line-height:1.25;font-weight:700;color:${C.text}">${esc(title)}</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px">
+        ${points.map((t) => `<tr>
+          <td valign="top" style="padding:0 10px 9px 0;font-family:${FONT};font-size:16px;line-height:1.45;font-weight:700;color:#14685E">&#10003;</td>
+          <td valign="top" style="padding:0 0 9px;font-family:${FONT};font-size:15.5px;line-height:1.45;color:${C.text}">${esc(t)}</td>
+        </tr>`).join('')}
+      </table>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px">
+        <tr>
+          <td style="padding:0 12px 0 0;font-family:${FONT};font-size:26px;font-weight:700;color:#8A8578;text-decoration:line-through">${esc(was)}</td>
+          <td style="font-family:${FONT};font-size:40px;line-height:1;font-weight:700;color:#14685E">${esc(now)}</td>
+        </tr>
+      </table>
+      ${buttonLoud(href, cta)}
+      <p style="margin:14px 0 0;font-family:${FONT};font-size:13.5px;line-height:1.5;color:#7A6A45">${esc(footnote)}</p>
+    </td></tr>
+  </table>`;
