@@ -253,7 +253,10 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
   const site = `https://oper-stack.${lang === 'ru' ? 'ru' : 'com'}`;
   const text = free
     ? [greeting, '',
-       ...(typeof score === 'number' ? [`${lang === 'ru' ? 'Итог' : 'The score'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`, ''] : []),
+       ...(typeof score === 'number'
+         ? [`${lang === 'ru' ? 'Видимость в ИИ' : 'AI visibility'}: ${score} ${lang === 'ru' ? 'из 100' : 'of 100'}.`,
+            lang === 'ru' ? 'Это цифра быстрой проверки. В отчёте шесть областей целиком, и они считаются отдельно.' : 'That is the quick check. The report scores six areas in full, counted separately.', '']
+         : []),
        t.measuredFree, '',
        ...(firstTask
          ? [t.firstFixHead, '', t.firstFixBody, '',
@@ -294,7 +297,7 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
           par(greeting),
           // Балл одной строкой: ради этой цифры человек и оставлял почту, а подробности в файле.
           ...(typeof score === 'number'
-            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Итог' : 'The score'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.</p>`]
+            ? [`<p style="margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:1.45;color:#14181C">${ru ? 'Видимость в ИИ' : 'AI visibility'}: <strong style="color:#1A8A7D;font-size:24px">${score}</strong> ${ru ? 'из 100' : 'of 100'}.<br><span style="font-size:14px;color:#5A6470">${ru ? 'Это цифра быстрой проверки. В отчёте шесть областей целиком, и они считаются отдельно.' : 'That is the quick check. The report scores six areas in full, counted separately.'}</span></p>`]
             : []),
           note(t.measuredFree),
           ...(firstTask
