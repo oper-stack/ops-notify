@@ -32,6 +32,9 @@ const PLATFORMS = [
 ];
 /** Subjects that are noise even from a platform sender. */
 const NOISE = /newsletter|digest|weekly|tips|webinar|community update|what's new|product update|unsubscribe|survey|feedback request/i;
+/** Заказ с русского сайта приходит с нашего адреса на наш же и по отправителю неотличим от
+ *  проверочного письма. Узнаём его по теме владельца: «Заказ OS-… · 7 000 ₽ · Site Kit». */
+const OWN_ORDER = /^Заказ OS-\S+ · /;
 /** Subjects that always matter, whoever sends them. */
 const HOT = /order|purchase|payment|paid|invoice|receipt|refund|chargeback|dispute|payout|licen[cs]e|new contract|hired|proposal|offer|review|comment|upvote|approved|rejected|verification|verify|suspended|action required/i;
 
@@ -40,6 +43,8 @@ function classify(from, to, subject) {
   const toAddrs = (to || []).map((t) => (t.address || '').toLowerCase());
   const platform = PLATFORMS.find(([frag]) => fromAddr.endsWith(frag) || fromAddr.includes('@' + frag) || fromAddr.includes('.' + frag));
   const toOwn = toAddrs.some((a) => OWN_ADDRESSES.includes(a));
+  // Заказ проверяем первым: он важнее любых правил про отправителя и про шум.
+  if (OWN_ORDER.test(subject)) return { label: 'oper-stack.ru · заказ', icon: '🧾', hot: true };
   if (NOISE.test(subject) && !HOT.test(subject)) return null;
   if (platform) return { label: platform[1], icon: platform[2], hot: HOT.test(subject) };
   if (toOwn) return { label: fromAddr.split('@')[1] || 'mail', icon: '✉️', hot: HOT.test(subject) };
