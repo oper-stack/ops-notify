@@ -286,7 +286,7 @@ function buildLetter({ host, lang, scores, comparison, free = false, score = nul
           ...(firstTask
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.firstFixHead}</p>`,
                par(t.firstFixBody),
-               taskBlock(firstTask)]
+               taskBlock(firstTask, lang)]
             : []),
           '<hr style="border:0;border-top:1px solid #CFC8BA;margin:24px 0">',
           par(`<strong>${t.moreHead}</strong> ${t.moreBody}`),
