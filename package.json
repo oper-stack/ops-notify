@@ -9,7 +9,7 @@
     "mail:dry": "node notify-mail.mjs --dry-run",
     "digest": "node digest.mjs",
     "digest:dry": "node digest.mjs --dry-run",
-    "test": "node test-letter.mjs",
+    "test": "node test-letter.mjs && node test-queue.mjs",
     "verify:funnel": "node verify-funnel.mjs"
   },
   "engines": {

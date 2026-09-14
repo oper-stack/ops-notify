@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
 
 const arg = (k, d = '') => {
@@ -34,6 +35,8 @@ const job = arg('json')
 if (!job.email) { console.error('нужен --email или --json с почтой'); process.exit(2); }
 
 const dir = mkdtempSync(join(tmpdir(), 'operstack-prospect-'));
+/** Сборщик из node_modules этого репозитория, а не из сети: версия должна быть та, что в замке. */
+const AUDIT_BIN = fileURLToPath(new URL('./node_modules/@operstack/audit/bin/audit.mjs', import.meta.url));
 const listPath = join(dir, 'clients.txt');
 
 if (job.sites) {
@@ -47,7 +50,10 @@ if (job.sites) {
 const count = readFileSync(listPath, 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#')).length;
 console.error(`сайтов в заявке: ${count}, для ${job.email}`);
 
-const run = spawnSync('npx', ['--yes', '@operstack/audit', 'prospect', listPath,
+// Зовём тот сборщик, который стоит в этом репозитории и на который написаны тесты.
+// `npx --yes @operstack/audit` тянул из сети «самую свежую» версию: покупатель получал файлы
+// от кода, которого здесь никто не запускал, и лишний раз ждал скачивания.
+const run = spawnSync(process.execPath, [AUDIT_BIN, 'prospect', listPath,
   '--out', join(dir, 'prospects'), '--lang', job.lang === 'ru' ? 'ru' : 'en'],
   { encoding: 'utf8', cwd: dir, timeout: 20 * 60 * 1000 });
 console.error(run.stderr?.split('\n').slice(-4).join('\n') || '');

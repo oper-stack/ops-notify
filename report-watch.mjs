@@ -53,14 +53,31 @@ function parseJob(body) {
   // Почта режет длинные строки: в quoted-printable перенос выглядит как «=» и конец строки.
   // Без склейки подпись рвётся пополам и не сходится ни с чем.
   const flat = String(body || '').replace(/=\r?\n/g, '').replace(/\r\n/g, '\n');
-  const m = /REPORT-RUN v1 ([A-Za-z0-9_-]+)\s+([A-Za-z0-9_-]+)/.exec(flat);
+  const m = /(REPORT|PROSPECT)-RUN v1 ([A-Za-z0-9_-]+)\s+([A-Za-z0-9_-]+)/.exec(flat);
   if (!m) return null;
-  const [, payload, sig] = m;
+  const [, kindRaw, payload, sig] = m;
+  const kind = kindRaw === 'PROSPECT' ? 'prospect' : 'report';
   const expected = createHmac('sha256', SECRET).update(payload).digest('base64url');
   const a = Buffer.from(sig); const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return { bad: 'подпись не сходится' };
   let data;
   try { data = JSON.parse(b64urlDecode(payload)); } catch { return { bad: 'payload не разбирается' }; }
+
+  /**
+   * Заявка со списком сайтов: её ставит страница /prospects/ после оплаты курса.
+   *
+   * Эти письма приходили в ящик с самого начала, и уборка их бережно не трогала, а читать их
+   * было некому: очередь искала только «REPORT-RUN v1». Покупатель вставлял список, видел
+   * «готово» и не получал ничего.
+   */
+  if (kind === 'prospect') {
+    const sites = Array.isArray(data.sites)
+      ? data.sites.map((x) => ({ url: String(x.url || ''), name: String(x.name || '') })).filter((x) => x.url)
+      : [];
+    if (!data.email || !sites.length) return { bad: 'в заявке на список нет почты или сайтов' };
+    return { kind, email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', sites, brand: data.brand || null };
+  }
+
   if (!data.url || !data.email) return { bad: 'в заявке нет адреса сайта или почты' };
   const rivals = Array.isArray(data.rivals) ? data.rivals.map(String).filter(Boolean).slice(0, 3) : [];
   // free это выдача за почту после бесплатной проверки: пять страниц и без списка задач.
@@ -71,8 +88,10 @@ function parseJob(body) {
   // Результат проверки со страницы едет целиком и передаётся отчёту как есть: мерить второй раз
   // нельзя, два честных замера живого сайта расходятся на пару баллов.
   const visibility = data.visibility && typeof data.visibility === 'object' ? data.visibility : null;
-  return { url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals, score, visibility };
+  return { kind, url: String(data.url), email: String(data.email), lang: data.lang === 'ru' ? 'ru' : 'en', tier, rivals, score, visibility };
 }
+
+export { parseJob as __parseJobForTests };
 
 async function telegram(text) {
   const token = env('TG_TOKEN'); const chat = env('TG_CHAT_ID');
@@ -100,14 +119,36 @@ async function telegram(text) {
  * Уходит один раз, после второй неудачной попытки, чтобы человек не получил два письма об
  * одной поломке.
  */
-async function sendFailureNote({ email, url, lang }) {
+async function sendFailureNote({ email, url, lang, kind = 'report', sites = [] }) {
   const user = env('GOOGLE_USER'); const pass = env('GOOGLE_APP_PASSWORD');
   if (!user || !pass) return false;
   let host = url;
   try { host = new URL(url).host; } catch { /* оставляем как есть */ }
   const ru = lang === 'ru';
   const site = ru ? 'https://oper-stack.ru' : 'https://oper-stack.com';
-  const t = ru
+  // У заявки со списком нет одного адреса, и письмо про «отчёт по undefined» было бы хуже
+  // молчания. Здесь своя формулировка и своё обещание: список человек уже оплатил.
+  const t = kind === 'prospect'
+    ? (ru
+      ? {
+          subject: `Не получилось собрать таблицу по ${sites.length} сайтам`,
+          heading: ['Не получилось собрать таблицу', `${sites.length} сайтов`],
+          lead: `Вы прислали список из <strong>${sites.length}</strong> сайтов, и мы обещали таблицу. Её не будет, и честнее сказать об этом, чем молчать.`,
+          why: 'Сборщик не смог дочитать список до конца. Чаще всего так бывает, когда часть сайтов отвечает слишком долго или закрыта для обращений извне.',
+          what: 'Напишите нам на info@oper-stack.com, и мы прогоним список руками. Присылать его заново не нужно, он у нас есть.',
+          again: 'Оплаченное никуда не девается: таблицу вы получите.',
+          cta: 'Написать нам',
+        }
+      : {
+          subject: `We could not build the table for your ${sites.length} sites`,
+          heading: ['We could not build the table for', `${sites.length} sites`],
+          lead: `You sent a list of <strong>${sites.length}</strong> sites and we promised a table. There will be no table, and saying so is better than silence.`,
+          why: 'Our collector could not read the list through. Usually that means some of those sites answer too slowly or are closed to outside requests.',
+          what: 'Write to info@oper-stack.com and we will run the list by hand. No need to send it again, we have it.',
+          again: 'What you paid for is not lost: you will get the table.',
+          cta: 'Write to us',
+        })
+    : ru
     ? {
         subject: `Не получилось собрать отчёт по ${host}`,
         heading: ['Не получилось собрать отчёт', host],
@@ -130,9 +171,11 @@ async function sendFailureNote({ email, url, lang }) {
     site: ru ? 'ru' : 'en',
     preheader: t.subject,
     heading: t.heading,
-    blocks: [par(t.lead), par(t.why), par(`<strong>${t.what}</strong>`), button(`${site}/ai-visibility/`, `${t.cta} →`, 'quiet'), note(t.again)],
+    blocks: [par(t.lead), par(t.why), par(`<strong>${t.what}</strong>`),
+      button(kind === 'prospect' ? 'mailto:info@oper-stack.com' : `${site}/ai-visibility/`, `${t.cta} →`, 'quiet'), note(t.again)],
   });
-  const text = [t.lead.replace(/<[^>]+>/g, ''), '', t.why, '', t.what, '', t.again, '', `${site}/ai-visibility/`].join('\n');
+  const text = [t.lead.replace(/<[^>]+>/g, ''), '', t.why, '', t.what, '', t.again, '',
+    kind === 'prospect' ? 'info@oper-stack.com' : `${site}/ai-visibility/`].join('\n');
   const transport = nodemailer.createTransport({
     host: 'smtp.gmail.com', port: 465, secure: true, pool: false,
     auth: { user, pass }, connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000,
@@ -144,6 +187,15 @@ async function sendFailureNote({ email, url, lang }) {
     console.error(`  письмо о неудаче не ушло: ${e.message}`);
     return false;
   } finally { transport.close(); }
+}
+
+/** Список сайтов: тот же приём, свой скрипт. Он сам соберёт таблицу и отправит два файла. */
+function runProspect({ email, lang, sites, brand }) {
+  const job = { email, lang, sites, ...(brand ? { brand } : {}) };
+  const r = spawnSync(process.execPath, [resolve(ROOT, 'prospect-run.mjs'), `--json=${JSON.stringify(job)}`], {
+    cwd: ROOT, encoding: 'utf8', timeout: 20 * 60 * 1000, env: process.env, stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  return r.status === 0;
 }
 
 /** Сам прогон отдан отдельному процессу: падение одной заявки не уносит очередь. */
@@ -179,10 +231,10 @@ async function main() {
     const lock = await client.getMailboxLock(allMail);
     try {
       // Сначала собираем, потом действуем: команда во время открытого потока fetch вешает соединение.
-      const uids = await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d "REPORT-RUN v1" -label:${LABEL}` }, { uid: true });
+      const uids = await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d ("REPORT-RUN v1" OR "PROSPECT-RUN v1") -label:${LABEL}` }, { uid: true });
       // Кому одна попытка уже досталась. Список снимаем до фетча: команда во время открытого
       // потока вешает соединение.
-      retried = new Set((await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d "REPORT-RUN v1" label:${RETRY_LABEL}` }, { uid: true })) || []);
+      retried = new Set((await client.search({ gmailRaw: `newer_than:${LOOKBACK_DAYS}d ("REPORT-RUN v1" OR "PROSPECT-RUN v1") label:${RETRY_LABEL}` }, { uid: true })) || []);
       if (uids && uids.length) {
         for await (const msg of client.fetch(uids, { uid: true, envelope: true, source: true }, { uid: true })) {
           queue.push({ uid: msg.uid, subject: msg.envelope?.subject || '', body: msg.source ? msg.source.toString('utf8') : '' });
@@ -194,6 +246,12 @@ async function main() {
     if (queue.length) console.log(`в очереди: ${queue.length}`);
 
     let done = 0; let failed = 0; let refused = 0;
+    /**
+     * Список из двадцати сайтов это до двадцати минут работы, а всему заданию в GitHub отведено
+     * сорок пять. Два списка подряд не влезают, и задание убили бы посередине. Берём один за
+     * прогон: очередь просыпается каждые пять минут, второй уедет следующим.
+     */
+    let prospectsDone = 0;
     for (const item of TIDY ? [] : queue.slice(0, MAX_PER_RUN)) {
       const job = parseJob(item.body);
       if (!job) { console.log(`  пропуск uid ${item.uid}: подписи в письме нет`); continue; }
@@ -208,10 +266,17 @@ async function main() {
         // каждое чужое письмо приучил бы не смотреть на красное вообще.
         refused++; continue;
       }
-      console.log(`  ${job.tier === 'free' ? 'бесплатно' : `${job.tier} USD`} · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
+      if (job.kind === 'prospect' && prospectsDone >= 1) {
+        console.log(`  список для ${job.email} ждёт следующего прогона: за один берём один`);
+        continue;
+      }
+      console.log(job.kind === 'prospect'
+        ? `  список · сайтов ${job.sites.length} → ${job.email} (${job.lang})`
+        : `  ${job.tier === 'free' ? 'бесплатно' : `${job.tier} USD`} · ${job.url}${job.rivals.length ? ` против ${job.rivals.join(', ')}` : ''} → ${job.email} (${job.lang})`);
       if (LIST || DRY) continue;
 
-      const ok = runReport(job);
+      if (job.kind === 'prospect') prospectsDone++;
+      const ok = job.kind === 'prospect' ? runProspect(job) : runReport(job);
       // В «Всей почте» перенос равносилен навешиванию ярлыка: он и нужен, чтобы поиск с -label
       // больше эту заявку не возвращал.
       const close = async () => {
@@ -228,10 +293,11 @@ async function main() {
         // Молчание здесь и есть самая дорогая поломка: человек оставил почту и решит, что
         // бесплатный продукт не работает. Говорим ему правду, а Максиму пишем в Telegram.
         const told = await sendFailureNote(job);
-        await telegram(`❌ Отчёт для ${job.email} не ушёл и со второй попытки, ${job.url}. ${told ? 'Человеку написали, что не вышло.' : 'СКАЗАТЬ ЧЕЛОВЕКУ НЕ УДАЛОСЬ.'}`);
+        const what = job.kind === 'prospect' ? `Таблица по ${job.sites.length} сайтам` : `Отчёт по ${job.url}`;
+        await telegram(`❌ ${what} для ${job.email} не ушла(ёл) и со второй попытки. ${told ? 'Человеку написали, что не вышло.' : 'СКАЗАТЬ ЧЕЛОВЕКУ НЕ УДАЛОСЬ.'}`);
         await close();
       } else {
-        await telegram(`⚠️ Отчёт для ${job.email} не ушёл (${job.url}). Повторим через пять минут.`);
+        await telegram(`⚠️ ${job.kind === 'prospect' ? `Таблица по ${job.sites.length} сайтам` : `Отчёт по ${job.url}`} для ${job.email} не ушла(ёл). Повторим через пять минут.`);
         await client.messageCopy(String(item.uid), RETRY_LABEL, { uid: true }).catch(() => {});
       }
     }
@@ -241,7 +307,7 @@ async function main() {
     if (!DRY && !LIST) try {
       const inbox = await client.getMailboxLock('INBOX');
       try {
-        const done_uids = await client.search({ gmailRaw: `in:inbox "REPORT-RUN v1" label:${LABEL}` }, { uid: true });
+        const done_uids = await client.search({ gmailRaw: `in:inbox ("REPORT-RUN v1" OR "PROSPECT-RUN v1") label:${LABEL}` }, { uid: true });
         if (done_uids && done_uids.length) {
           await client.messageMove(done_uids, LABEL, { uid: true });
           console.log(`убрано из входящих: ${done_uids.length}`);
@@ -257,7 +323,9 @@ async function main() {
   }
 }
 
-main().catch(async (e) => {
+// Файл заодно и модуль: тест разбора заявок импортирует parseJob и не должен лезть в почту.
+const RUN_AS_PROGRAM = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (RUN_AS_PROGRAM) main().catch(async (e) => {
   console.error(e.message);
   await telegram(`⚠️ Очередь отчётов не отработала: ${e.message}`);
   process.exit(1);
