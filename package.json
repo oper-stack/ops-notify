@@ -18,7 +18,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@operstack/audit": "^0.19.3",
+    "@operstack/audit": "^0.21.1",
     "imapflow": "^1.0.190",
     "nodemailer": "^10.0.8"
   }
