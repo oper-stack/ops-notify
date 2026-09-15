@@ -12,6 +12,10 @@
  *   1. npm-пакет аудита на своём сайте: собрались ли проверки и есть ли оценки.
  *   2. Актор проверки видимости в Apify: дошёл ли прогон до SUCCEEDED и вернул ли строку с баллом.
  *   3. Страницы оплаты в Whop: отдаются ли и виден ли на них товар с ценой.
+ *   4. Бесплатная проверка на обоих сайтах: сходится ли балл с областями и не пляшет ли
+ *      между двумя прогонами подряд.
+ *   5. MCP-сервер: отвечает ли списком инструментов.
+ *   6. Счётчик визитов: выдаётся ли строка для вставки с полным адресом и отдаётся ли скрипт.
  *
  *   APIFY_TOKEN=... TG_TOKEN=... TG_CHAT_ID=... node product-smoke.mjs [--dry-run]
  */
@@ -109,12 +113,75 @@ async function checkCheckoutPages() {
   return 'обе страницы отдают товар, цену и кнопку';
 }
 
+/**
+ * Бесплатная проверка на обоих сайтах, и главное: два прогона подряд по одному адресу.
+ *
+ * 15.09.2026 балл одного и того же сайта гулял от 46 до 69, потому что области, считавшиеся
+ * по страницам, считались по тем, что успели ответить. Нашлось руками; эта проверка ловила бы
+ * такое сама, каждое утро. Адрес берём наш собственный: чужие сайты прогонять ради своей
+ * телеметрии нечестно, а свой мы знаем.
+ */
+async function checkFreeCheck() {
+  const bad = [];
+  for (const [site, target] of [['https://oper-stack.com', 'https://oper-stack.com'], ['https://oper-stack.ru', 'https://oper-stack.ru']]) {
+    const scores = [];
+    for (let i = 0; i < 2; i++) {
+      const res = await fetch(`${site}/api/ai-visibility/?url=${encodeURIComponent(target)}`, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; OperStackSmoke/1.0)' } });
+      if (!res.ok) { bad.push(`${site}: проверка отвечает ${res.status}`); break; }
+      let data; try { data = await res.json(); } catch { bad.push(`${site}: ответ не JSON`); break; }
+      if (!data.ok) { bad.push(`${site}: проверка отказалась считать: ${String(data.error).slice(0, 80)}`); break; }
+      if (!Number.isFinite(data.score)) { bad.push(`${site}: балла нет в ответе`); break; }
+      const sum = (data.areas || []).filter((a) => a.measured !== false && typeof a.score === 'number').reduce((t, a) => t + a.score, 0);
+      const max = (data.areas || []).filter((a) => a.measured !== false && typeof a.score === 'number').reduce((t, a) => t + a.max, 0);
+      const expected = max === 100 ? sum : Math.round((sum / max) * 100);
+      if (expected !== data.score) bad.push(`${site}: области дают ${expected}, а балл ${data.score}`);
+      const hasFindings = (data.rest || []).length > 0 || data.score < 90;
+      if (hasFindings && !(data.fixes || []).length) bad.push(`${site}: есть что чинить (балл ${data.score}), а первой правки нет`);
+      scores.push(data.score);
+    }
+    if (scores.length === 2 && scores[0] !== scores[1]) bad.push(`${site}: два прогона подряд дали ${scores[0]} и ${scores[1]}`);
+  }
+  if (bad.length) throw new Error(bad.join('; '));
+  return 'оба сайта: балл сходится с областями и не пляшет между прогонами';
+}
+
+/** MCP-сервер: он продаётся как бесплатный продукт, значит должен отвечать списком инструментов. */
+async function checkMcp() {
+  const res = await fetch(`${SITE}/api/mcp/`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  if (!res.ok) throw new Error(`отвечает ${res.status}`);
+  const body = await res.json().catch(() => ({}));
+  const tools = body?.result?.tools || [];
+  if (tools.length < 5) throw new Error(`инструментов ${tools.length}, ждали не меньше пяти`);
+  return `${tools.length} инструментов`;
+}
+
+/** Счётчик визитов: строка для вставки должна быть с полным адресом, иначе она мертва на чужом сайте. */
+async function checkCounter() {
+  const res = await fetch(`${SITE}/api/visits/register/`, {
+    method: 'POST', headers: { 'content-type': 'application/json', origin: SITE },
+    body: JSON.stringify({ domain: 'smoke-operstack.example', email: 'info+smoke@oper-stack.com' }),
+  });
+  if (!res.ok) throw new Error(`регистрация отвечает ${res.status}`);
+  const d = await res.json().catch(() => ({}));
+  if (!d.snippet || !d.snippet.includes('https://oper-stack.com/v.js')) throw new Error('в строке для вставки нет полного адреса скрипта');
+  if (!d.dashboard || !d.dashboard.startsWith('https://')) throw new Error('нет ссылки на панель с числами');
+  const js = await fetch(`${SITE}/v.js`);
+  if (!js.ok) throw new Error(`сам счётчик отвечает ${js.status}`);
+  return 'строка для вставки с полным адресом, скрипт отдаётся';
+}
+
 const main = async () => {
   const jobs = [
     ['пакет аудита', checkAuditPackage],
     ['настоящий браузер', checkRealBrowser],
     ['актор видимости', checkActor],
     ['страницы оплаты', checkCheckoutPages],
+    ['бесплатная проверка', checkFreeCheck],
+    ['MCP-сервер', checkMcp],
+    ['счётчик визитов', checkCounter],
   ];
   const ok = []; const bad = [];
   for (const [name, fn] of jobs) {
