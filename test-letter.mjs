@@ -86,9 +86,11 @@ for (const lang of ['ru', 'en']) {
 // Старая заявка принесла одну цифру без разбивки: письмо всё равно должно быть честным.
 {
   const head = overallSummary({ score: 47, grade: 'C', areas: [], source: 'visibility:reused' }, { lang: 'ru' });
-  const { text } = letter('ru', true, head);
+  const { text, html } = letter('ru', true, head);
   ok('старая заявка: цифра названа', /47 из 100/.test(text));
   ok('старая заявка: областей не выдумываем', !/\/ 25/.test(text));
+  // Пустая таблица в письме выглядит как поломка вёрстки, а не как «данных нет».
+  ok('старая заявка: пустой таблицы в письме нет', !/<table[^>]*>\s*<\/table>/.test(html) && !/border-bottom:1px solid[^>]*"><\/td>/.test(html));
 }
 
 // ---- цепочка писем после бесплатной проверки
