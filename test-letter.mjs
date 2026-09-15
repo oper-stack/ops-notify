@@ -93,6 +93,20 @@ for (const lang of ['ru', 'en']) {
   ok('старая заявка: пустой таблицы в письме нет', !/<table[^>]*>\s*<\/table>/.test(html) && !/border-bottom:1px solid[^>]*"><\/td>/.test(html));
 }
 
+// ---- область без балла: в письме слово, а не «null / 25» и не ноль
+//
+// С 0.19.0 движок не выдумывает оценку за непрочитанный robots.txt: область идёт без балла, а
+// итог считается по остальным. Письмо обязано напечатать это словами на языке письма.
+{
+  const areasNull = AREAS.map((a) => (a.id === 'access' ? { ...a, score: null, measured: false } : a));
+  const head = { ...overallSummary({ ...OVERALL, areas: areasNull, score: 60 }, { lang: 'ru' }), areas: areasNull.map((a) => ({ ...a, label: a.label })), notMeasured: 'не измерялось' };
+  const { text, html } = buildLetter({ host: 'example.com', lang: 'ru', scores: SCORES, comparison: null, free: true, head, firstTask: TASK.ru });
+  ok('область без балла названа словом в тексте', /Can AI crawlers read it: не измерялось/.test(text));
+  ok('и в разметке', /не измерялось<\/td>/.test(html));
+  ok('ни null, ни undefined в письмо не попали', !/null|undefined/.test(text) && !/null|undefined/.test(html));
+  ok('остальные области напечатаны числом', /Is there something to quote: 20 \/ 25/.test(text));
+}
+
 // ---- цепочка писем после бесплатной проверки
 //
 // Цифру в цепочке берут из таблицы, а её строку могли поправить руками или запись могла не

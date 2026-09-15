@@ -89,9 +89,16 @@ export const headline = ({ host, label, score, grade, note: caption }) =>
  * Пять областей балла: в сумме они дают ровно заголовок, и читатель может сложить их руками.
  * У каждой свой потолок, поэтому «из десяти» здесь не годится.
  */
-export const areaTable = (areas) =>
+export const areaTable = (areas, notMeasured = 'not measured') =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">
     ${areas.map(({ label, score, max }) => {
+      // Неизмеренная область печатается словами и серым: ноль или «null / 25» сказали бы неправду.
+      if (score === null || score === undefined) {
+        return `<tr>
+        <td style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:15px;line-height:1.35;color:${C.text}">${esc(label)}</td>
+        <td align="right" style="padding:9px 10px;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:14px;white-space:nowrap;color:${C.dim}">${esc(notMeasured)}</td>
+      </tr>`;
+      }
       const share = max ? score / max : 0;
       const colour = share >= 0.85 ? C.teal : share >= 0.6 ? C.amber : '#B4462F';
       return `<tr>
