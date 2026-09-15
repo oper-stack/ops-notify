@@ -18,6 +18,7 @@
  *   node watch-run.mjs --register --kind=rivals-weekly --email=... --url=... --lang=ru --rivals=a.com,b.com
  *                                      записать новую строку (это же делает очередь после отчёта за 29)
  *   node watch-run.mjs --register --kind=audit-90 --email=... --url=... --lang=en
+ *   node watch-run.mjs --register --kind=fix-30 --email=... --url=... --lang=ru      после выдачи пакета Fix
  *
  * Память это лист «Наблюдение» той же таблицы, что у цепочки писем. Столбцы:
  *   A дата записи · B вид · C почта · D язык · E сайт · F конкуренты через запятую
@@ -44,7 +45,7 @@ export const SHEET = 'Наблюдение';
 export const HEADER = ['Дата', 'Вид', 'Почта', 'Язык', 'Сайт', 'Конкуренты', 'Баллы при записи', 'Отправлено', 'Отписан', 'Последний балл'];
 
 /** Дни, через которые уходит каждый срез, по виду записи. */
-export const SCHEDULE = { 'rivals-weekly': [7, 14, 21, 28], 'audit-90': [90] };
+export const SCHEDULE = { 'rivals-weekly': [7, 14, 21, 28], 'audit-90': [90], 'fix-30': [30] };
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, ''); } catch { return String(u); } };

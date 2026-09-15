@@ -34,17 +34,24 @@ export function buildWatchLetter({ lang = 'en', kind = 'rivals-weekly', week = 1
   const host = String(site?.host || '').trim() || (ru ? 'ваш сайт' : 'your site');
   const weekly = kind === 'rivals-weekly';
 
+  const fix30 = kind === 'fix-30';
   const subject = weekly
     ? (ru ? `Срез ${week} из 4: ${host} и конкуренты` : `Snapshot ${week} of 4: ${host} and rivals`)
-    : (ru ? `90 дней спустя: что сдвинулось на ${host}` : `90 days on: what moved on ${host}`);
+    : fix30
+      ? (ru ? `30 дней после правок: что сдвинулось на ${host}` : `30 days after the fixes: what moved on ${host}`)
+      : (ru ? `90 дней спустя: что сдвинулось на ${host}` : `90 days on: what moved on ${host}`);
 
   const lead = weekly
     ? (ru
       ? `Тот же замер, тем же кодом, что и в отчёте. Ниже ваш балл тогда и сейчас, и то же по каждому конкуренту.`
       : `The same measurement by the same code as in your report. Below is your score then and now, and the same for each rival.`)
-    : (ru
-      ? `Прошло девяносто дней с аудита. Мы перемерили сайт тем же кодом и с теми же настройками. Ниже что было, что стало и что из найденного тогда закрыто.`
-      : `Ninety days since the audit. We measured the site again by the same code with the same settings. Below is what it was, what it is, and what from back then is closed.`);
+    : fix30
+      ? (ru
+        ? `Прошло тридцать дней с правок. Мы перемерили сайт тем же кодом и с теми же настройками. Ниже что было до правок, что стало, и держится ли результат.`
+        : `Thirty days since the fixes. We measured the site again by the same code with the same settings. Below is what it was before the fixes, what it is now, and whether the result holds.`)
+      : (ru
+        ? `Прошло девяносто дней с аудита. Мы перемерили сайт тем же кодом и с теми же настройками. Ниже что было, что стало и что из найденного тогда закрыто.`
+        : `Ninety days since the audit. We measured the site again by the same code with the same settings. Below is what it was, what it is, and what from back then is closed.`);
 
   const rows = [{ host, was: site?.was ?? null, now: site?.now ?? null, you: true }, ...rivals.map((r) => ({ host: r.host, was: r.was ?? null, now: r.now ?? null, you: false }))];
 
@@ -95,7 +102,7 @@ export function buildWatchLetter({ lang = 'en', kind = 'rivals-weekly', week = 1
     site: lang,
     unsubUrl,
     preheader: subject,
-    heading: weekly ? [ru ? `Срез ${week} из 4` : `Snapshot ${week} of 4`, host] : [ru ? '90 дней спустя' : '90 days on', host],
+    heading: weekly ? [ru ? `Срез ${week} из 4` : `Snapshot ${week} of 4`, host] : fix30 ? [ru ? '30 дней после правок' : '30 days after the fixes', host] : [ru ? '90 дней спустя' : '90 days on', host],
     blocks: [par(lead), table, ...(gapLine ? [par(`<strong>${esc(gapLine)}</strong>`)] : []), ...(unansweredLine ? [note(esc(unansweredLine))] : []), note(esc(closing))],
   });
 
