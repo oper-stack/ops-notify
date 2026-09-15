@@ -29,6 +29,9 @@ is('день 40, все четыре ушли: ничего', dueSnapshot('rival
 is('аудит: день 89 рано', dueSnapshot('audit-90', reg, '', t0 + 89 * day), null);
 is('аудит: день 90 срез', dueSnapshot('audit-90', reg, '', t0 + 90 * day), 1);
 is('аудит: отправлен, повтора нет', dueSnapshot('audit-90', reg, '1', t0 + 120 * day), null);
+is('Fix: день 29 рано', dueSnapshot('fix-30', reg, '', t0 + 29 * day), null);
+is('Fix: день 30 срез', dueSnapshot('fix-30', reg, '', t0 + 30 * day), 1);
+is('Fix: отправлен, повтора нет', dueSnapshot('fix-30', reg, '1', t0 + 60 * day), null);
 is('неизвестный вид: ничего', dueSnapshot('что-то', reg, '', t0 + 90 * day), null);
 is('непонятная дата: ничего', dueSnapshot('rivals-weekly', 'вчера', '', t0 + 90 * day), null);
 is('расписание еженедельных из четырёх', SCHEDULE['rivals-weekly'].length, 4);
@@ -62,6 +65,10 @@ is('расписание еженедельных из четырёх', SCHEDULE
   const audit = buildWatchLetter({ lang: 'en', kind: 'audit-90', week: 1, site: { host: 'example.com', was: 21, now: 47 }, rivals: [] });
   ok('перепроверка через 90 дней названа', /90 days on/.test(audit.subject));
   ok('и объявлена разовой', /one-off/.test(audit.text));
+  const fix = buildWatchLetter({ lang: 'ru', kind: 'fix-30', week: 1, site: { host: 'x.ru', was: 30, now: 55 }, rivals: [] });
+  ok('письмо после Fix названо тридцатью днями', /^30 дней после правок: что сдвинулось на x\.ru$/.test(fix.subject));
+  ok('и спрашивает, держится ли результат', /держится ли результат/.test(fix.text));
+  ok('и объявлено разовым', /разовая перепроверка/.test(fix.text));
   ok('в английском нет кириллицы', !/[А-Яа-яЁё]/.test(last.text + audit.text));
 }
 
@@ -77,7 +84,7 @@ is('расписание еженедельных из четырёх', SCHEDULE
 {
   const vals = [null, undefined, 0, 46, ''];
   let combos = 0; let broken = 0;
-  for (const lang of ['ru', 'en']) for (const kind of ['rivals-weekly', 'audit-90']) for (const was of vals) for (const now of vals) for (const host of ['x.ru', '', undefined]) {
+  for (const lang of ['ru', 'en']) for (const kind of ['rivals-weekly', 'audit-90', 'fix-30']) for (const was of vals) for (const now of vals) for (const host of ['x.ru', '', undefined]) {
     combos++;
     const L = buildWatchLetter({ lang, kind, week: 1, site: { host, was, now }, rivals: [{ host: 'r.ru', was, now }] });
     if (/null|undefined|NaN/.test(L.subject + L.text + L.html)) { broken++; console.error(`  мусор: ${lang}/${kind} host=${JSON.stringify(host)} was=${JSON.stringify(was)} now=${JSON.stringify(now)}`); }
