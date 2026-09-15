@@ -150,8 +150,8 @@ async function sendFailureNote({ email, url, lang, kind = 'report', sites = [] }
         })
     : ru
     ? {
-        subject: `Не получилось собрать отчёт по ${host}`,
-        heading: ['Не получилось собрать отчёт', host],
+        subject: `Не получилось собрать список правок по ${host}`,
+        heading: ['Не получилось собрать список правок', host],
         lead: `Вы оставили почту, чтобы получить отчёт по <strong>${host}</strong>, и мы обещали письмо. Отчёта не будет, и честнее сказать об этом, чем молчать.`,
         why: 'Сборщику не удалось открыть ни одной страницы вашего сайта. Так бывает, когда сайт отвечает слишком долго, отдаёт очень тяжёлые страницы или стоит за защитой от роботов: Cloudflare, Qrator, DDoS-Guard. Защита разворачивает незнакомых клиентов, и наш сборщик для неё незнакомый.',
         what: 'Если защита есть, впустите нас: добавьте в её белый список клиентов, у которых в строке User-Agent есть слово OperStack. Это две минуты в настройках. Потом напишите нам на info@oper-stack.com, и мы соберём отчёт заново, бесплатно. Адрес сайта указывать не нужно, он у нас есть.',
@@ -159,8 +159,8 @@ async function sendFailureNote({ email, url, lang, kind = 'report', sites = [] }
         cta: 'Открыть проверку',
       }
     : {
-        subject: `We could not build the report for ${host}`,
-        heading: ['We could not build the report for', host],
+        subject: `We could not build the fix list for ${host}`,
+        heading: ['We could not build the fix list for', host],
         lead: `You left your email for a report on <strong>${host}</strong>, and we promised one. There will be no report, and saying so is better than silence.`,
         why: 'Our collector could not open a single page of your site. That happens when the site answers too slowly, serves very heavy pages, or sits behind bot protection: Cloudflare, Qrator, DDoS-Guard. Protection turns away unknown clients, and our collector is one.',
         what: 'If there is protection, let us in: add clients whose User-Agent contains the word OperStack to its allowlist. Two minutes in the settings. Then write to info@oper-stack.com and we will build the report again, free of charge. No need to give the address again, we have it.',
