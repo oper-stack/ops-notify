@@ -173,5 +173,19 @@ for (const lang of ['ru', 'en']) {
   ok('перебрано не меньше полусотни сочетаний', combos >= 50);
 }
 
+// ---- ступень за 29: обещание четырёх срезов стоит в письме теми же словами, что на сайте.
+// Срезы построены 15.09.2026 (watch-run.mjs), и обещание вернулось в тексты только после этого.
+{
+  const cmp = { text: 'a.com 40 | b.com 50', html: '<table><tr><td>a.com</td></tr></table>' };
+  for (const lang of ['ru', 'en']) {
+    const L = buildLetter({ host: 'example.com', lang, scores: SCORES, comparison: cmp, free: false, head: null, firstTask: null });
+    const line = lang === 'ru' ? /четыре недели, раз в неделю, придёт срез/ : /four weeks a snapshot follows once a week/;
+    ok(`${lang}: письмо за 29 обещает четыре среза`, line.test(L.text) && line.test(L.html));
+    ok(`${lang}: и говорит, когда первый`, (lang === 'ru' ? /Первый через неделю/ : /first one comes in a week/).test(L.text));
+    const nine = buildLetter({ host: 'example.com', lang, scores: SCORES, comparison: null, free: false, head: null, firstTask: null });
+    ok(`${lang}: письмо за 9 срезов не обещает`, !line.test(nine.text) && !line.test(nine.html));
+  }
+}
+
 if (bad) { console.error(`\n${bad} тест(ов) упало`); process.exit(1); }
 console.log('\nписьмо и отчёт несут один балл');

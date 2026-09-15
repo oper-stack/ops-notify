@@ -170,6 +170,7 @@ const COPY = {
     nextStep:
       'If you want a person to read every finding and write what it means for your business, that is the 149 USD audit at https://oper-stack.com/products/seo-audit/. If you want the work done, Fix at 249 USD closes the checks that need no subject knowledge of your market.',
     rivalsHead: 'You and your rivals',
+    snapshotsNext: 'For the next four weeks a snapshot follows once a week: your score and your rivals\' then and now, and how the gap moved. The first one comes in a week.',
     rivalsNote: 'Plus means the check passes, tilde means it needs attention, a dash means it fails, a question mark means it was not measured. The JavaScript measurement is run on your site only: it needs a real browser and would triple the time on four sites.',
     sign: 'OperStack · info@oper-stack.com',
   },
@@ -201,6 +202,7 @@ const COPY = {
     nextStep:
       'Если нужно, чтобы каждую находку прочитал человек и написал, что она значит для вашего бизнеса, это аудит за 12 500 ₽: https://oper-stack.ru/produkty/seo-audit/. Если нужно, чтобы работу сделали за вас, это пакет Fix: https://oper-stack.ru/produkty/fix/.',
     rivalsHead: 'Вы и ваши конкуренты',
+    snapshotsNext: 'Дальше четыре недели, раз в неделю, придёт срез: ваш балл и баллы конкурентов тогда и сейчас, и как изменился разрыв. Первый через неделю.',
     rivalsNote: 'Плюс значит проверка пройдена, тильда спорно, тире провалено, вопрос не измеряли. Замер по скриптам делается только по вашему сайту: для него нужен настоящий браузер, и на четырёх сайтах это утроило бы время.',
     sign: 'OperStack · info@oper-stack.com',
   },
@@ -297,7 +299,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
        ...(head ? [head.secondMeasure, ''] : []),
        rows, '',
        ...(head ? [head.secondMeasureFoot, ''] : []),
-       ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, ''] : []),
+       ...(comparison ? [t.rivalsHead, '', comparison.text, '', t.rivalsNote, '', t.snapshotsNext, ''] : []),
        t.whatIsIt, '', nextStep, '', t.sign].join('\n');
   // Заголовок двумя строками: домен не должен рваться посередине.
   const heading = ru
@@ -353,7 +355,8 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
           ...(comparison
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.rivalsHead}</p>`,
                `<div style="overflow-x:auto">${comparison.html}</div>`,
-               note(t.rivalsNote)]
+               note(t.rivalsNote),
+               par(t.snapshotsNext)]
             : []),
           par(t.whatIsIt),
           par(nextStep),
