@@ -57,7 +57,15 @@ export function buildWatchLetter({ lang = 'en', kind = 'rivals-weekly', week = 1
   if (best && site?.now !== null && site?.now !== undefined) {
     const gap = site.now - best.now;
     const gapWas = (site.was !== null && site.was !== undefined && best.was !== null && best.was !== undefined) ? site.was - best.was : null;
-    const trend = gapWas === null ? '' : (gap === gapWas ? (ru ? ', как и было' : ', unchanged') : (gap > gapWas ? (ru ? ', разрыв в вашу пользу вырос' : ', the gap moved in your favour') : (ru ? ', разрыв не в вашу пользу вырос' : ', the gap moved against you')));
+    // Движение разрыва словами, которые совпадают с положением: отстаёте, значит «сократили
+    // отставание» или «отстали ещё», впереди, значит «оторвались» или «отрыв сократился».
+    // Прежняя фраза «разрыв в вашу пользу вырос» у отстающего читалась как насмешка.
+    let trend = '';
+    if (gapWas !== null && gap !== gapWas) {
+      const moved = Math.abs(gap - gapWas);
+      if (gap < 0) trend = gap > gapWas ? (ru ? `, за неделю вы сократили отставание на ${moved}` : `, you closed ${moved} of that this week`) : (ru ? `, за неделю отстали ещё на ${moved}` : `, and fell ${moved} further behind this week`);
+      else trend = gap > gapWas ? (ru ? `, за неделю оторвались ещё на ${moved}` : `, and pulled ${moved} further ahead this week`) : (ru ? `, за неделю отрыв сократился на ${moved}` : `, though the lead shrank by ${moved} this week`);
+    } else if (gapWas !== null) trend = ru ? ', как и неделю назад' : ', as a week ago';
     gapLine = gap >= 0
       ? (ru ? `Вы впереди сильнейшего из них (${best.host}) на ${gap}${trend}.` : `You lead the strongest of them (${best.host}) by ${gap}${trend}.`)
       : (ru ? `Сильнейший из них (${best.host}) впереди вас на ${Math.abs(gap)}${trend}.` : `The strongest of them (${best.host}) leads you by ${Math.abs(gap)}${trend}.`);

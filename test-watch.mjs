@@ -44,7 +44,11 @@ is('расписание еженедельных из четырёх', SCHEDULE
   ok('без изменений названо словами', /a\.ru: 51 → 51 \(без изменений\)/.test(L.text));
   ok('падение конкурента со знаком минус', /b\.ru: 30 → 27 \(−3\)/.test(L.text));
   ok('разрыв с сильнейшим назван', /Сильнейший из них \(a\.ru\) впереди вас на 5/.test(L.text));
-  ok('и сказано, куда он сдвинулся', /разрыв не в вашу пользу вырос|разрыв в вашу пользу вырос|как и было/.test(L.text));
+  ok('и сказано, куда он сдвинулся, словами отстающего', /за неделю вы сократили отставание на 6/.test(L.text));
+  const ahead = buildWatchLetter({ lang: 'ru', kind: 'rivals-weekly', week: 3, site: { host: 'x.ru', was: 60, now: 70 }, rivals: [{ host: 'r.ru', was: 55, now: 58 }] });
+  ok('впереди и оторвались: так и сказано', /Вы впереди сильнейшего из них \(r\.ru\) на 12, за неделю оторвались ещё на 7/.test(ahead.text));
+  const same = buildWatchLetter({ lang: 'en', kind: 'rivals-weekly', week: 2, site: { host: 'x.com', was: 50, now: 52 }, rivals: [{ host: 'r.com', was: 60, now: 62 }] });
+  ok('разрыв не изменился: сказано по-английски', /leads you by 10, as a week ago/.test(same.text));
   ok('сказано, что дальше', /Следующий срез через неделю/.test(L.text));
   ok('отписка в тексте', /unsubscribe/.test(L.text));
   ok('чужого языка нет', !/[A-Za-z]{5}/.test(L.text.replace(/https?:\/\/\S+|example\.ru|a\.ru|b\.ru|OperStack|info@oper-stack\.com/g, '')));
