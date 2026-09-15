@@ -95,13 +95,20 @@ const btn = (href, label) => button(href, label);
  * «набрал  из 100», и человек прочитал бы это как небрежность, а не как сбой. Балла нет,
  * значит предложение строится без цифры.
  */
+/**
+ * The site address for a sentence that may not have one. The sheet is hand-editable and a column
+ * can shift, and without this a cold email said "Yesterday null scored 46 of 100". No address,
+ * so we say "your site": the sentence stays whole and the meaning does not change.
+ */
+const site = (host) => { const h = String(host ?? '').trim(); return h || 'your site'; };
+
 const said = (score) => { const s = String(score ?? '').trim(); return s !== '' && Number.isFinite(Number(s)); };
 
 export function letter2({ host, score, offerUrl, unsubUrl }) {
   return wrap({
     subject: 'Four hours left on the 19',
     bodyText: [
-      said(score) ? `Yesterday ${host} scored ${score} of 100, and we sent you everything the check found.` : `Yesterday we checked ${host} and sent you everything the check found.`,
+      said(score) ? `Yesterday ${site(host)} scored ${score} of 100, and we sent you everything the check found.` : `Yesterday we checked ${site(host)} and sent you everything the check found.`,
       '',
       'The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.',
       '',
@@ -112,7 +119,7 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
       'For scale: an agency that watches AI visibility for you charges 2,000 to 15,000 USD a month, on a contract you have to end. This is once, for a month, and there is nothing to cancel.',
     ],
     bodyHtml: [
-      said(score) ? `<p>Yesterday <strong>${host}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>` : `<p>Yesterday we checked <strong>${host}</strong> and sent you everything the check found.</p>`,
+      said(score) ? `<p>Yesterday <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>` : `<p>Yesterday we checked <strong>${site(host)}</strong> and sent you everything the check found.</p>`,
       '<p>The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.</p>',
       '<p>It is 29 USD. <strong>For four more hours it is 19</strong>, and then this link goes back to 29 and does not come back.</p>',
       btn(offerUrl, 'Take the full report at 19 USD →'),
@@ -138,7 +145,7 @@ export function letter3({ host, unsubUrl }) {
       '',
       'What works: twenty to ninety words at the top that answer the question the page is about, with one real figure and the source next to it. Then your normal page.',
       '',
-      `How to check it on ${host} in a minute: open any page that matters, read only the first paragraph, and ask whether a stranger would get a usable answer from it alone. If not, that page is invisible to an answer engine no matter how good the rest is.`,
+      `How to check it on ${site(host)} in a minute: open any page that matters, read only the first paragraph, and ask whether a stranger would get a usable answer from it alone. If not, that page is invisible to an answer engine no matter how good the rest is.`,
       '',
       `This is the kind of thing an agency writes on page nine of a 2,000 USD audit. We would rather you just knew it.`,
       '',
@@ -152,7 +159,7 @@ export function letter3({ host, unsubUrl }) {
       '<p>One thing worth knowing, whether or not you ever buy anything from us.</p>',
       '<p>When ChatGPT, Perplexity or Google AI decides what to quote, it does not read your page the way a person does. <strong>It takes the opening.</strong> If your first paragraph is a welcome, a mission statement or a note about how long you have been in business, that is what gets weighed, and it answers nobody’s question.</p>',
       '<p>What works: twenty to ninety words at the top that answer the question the page is about, with one real figure and the source next to it. Then your normal page.</p>',
-      `<p><strong>How to check it on ${host} in a minute:</strong> open any page that matters, read only the first paragraph, and ask whether a stranger would get a usable answer from it alone. If not, that page is invisible to an answer engine no matter how good the rest is.</p>`,
+      `<p><strong>How to check it on ${site(host)} in a minute:</strong> open any page that matters, read only the first paragraph, and ask whether a stranger would get a usable answer from it alone. If not, that page is invisible to an answer engine no matter how good the rest is.</p>`,
       '<p style="color:#666;font-size:14px">This is the kind of thing an agency writes on page nine of a 2,000 USD audit. We would rather you just knew it.</p>',
       `<p>Every problem we found on your site, turned into a task you can hand to anyone: <a href="${SITE}/products/site-report/">the site fix list</a>, 9 USD.</p>`,
       mcpBlockHtml('If you already use Claude, ChatGPT or Cursor, they can run this check inside the window you work in. You write in plain words: look at my site, compare me with these three, how many AI visits did I get this month.'),
@@ -194,7 +201,7 @@ export function letter4Owner({ host, score, unsubUrl }) {
   return wrap({
     subject: 'Your numbers, read by a person',
     bodyText: [
-      said(score) ? `Everything you have had from us so far was measured by a machine: ${host} scored ${score} of 100, and here is the list.` : `Everything you have had from us so far was measured by a machine: it read ${host}, and here is the list.`,
+      said(score) ? `Everything you have had from us so far was measured by a machine: ${site(host)} scored ${score} of 100, and here is the list.` : `Everything you have had from us so far was measured by a machine: it read ${site(host)}, and here is the list.`,
       '',
       'What a machine cannot do is tell you what those numbers mean for your business, and in what order to close them. A page that fails three checks but brings you no buyers is not the place to start.',
       '',
@@ -205,7 +212,7 @@ export function letter4Owner({ host, score, unsubUrl }) {
       `Book it: ${SITE}/products/seo-audit/`,
     ],
     bodyHtml: [
-      said(score) ? `<p>Everything you have had from us so far was measured by a machine: <strong>${host}</strong> scored <strong>${score} of 100</strong>, and here is the list.</p>` : `<p>Everything you have had from us so far was measured by a machine: it read <strong>${host}</strong>, and here is the list.</p>`,
+      said(score) ? `<p>Everything you have had from us so far was measured by a machine: <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>, and here is the list.</p>` : `<p>Everything you have had from us so far was measured by a machine: it read <strong>${site(host)}</strong>, and here is the list.</p>`,
       '<p>What a machine cannot do is tell you what those numbers mean for your business, and in what order to close them. A page that fails three checks but brings you no buyers is not the place to start.</p>',
       '<p>That is the audit: a person reads every finding on your site and writes what it means for you and what to do first. <strong>149 USD</strong> for the first ten, then 249, and it lands in one to three working days, five at most.</p>',
       '<p style="color:#666;font-size:14px">Agencies sell this as a one-off at 3,000 to 15,000 USD, or fold it into a retainer from 2,000 a month. The difference is not the person. It is that the measuring behind it was already done, by the same tool you have been using for free.</p>',
@@ -218,9 +225,9 @@ export function letter4Owner({ host, score, unsubUrl }) {
 /** Письмо 5. Две недели спустя: прогнать проверку снова и увидеть сдвиг. */
 export function letter5({ host, score, unsubUrl }) {
   return wrap({
-    subject: `Two weeks on: has ${host} moved?`,
+    subject: `Two weeks on: has ${site(host)} moved?`,
     bodyText: [
-      said(score) ? `Two weeks ago ${host} scored ${score} of 100.` : `Two weeks ago we checked ${host}.`,
+      said(score) ? `Two weeks ago ${site(host)} scored ${score} of 100.` : `Two weeks ago we checked ${site(host)}.`,
       '',
       'Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.',
       '',
@@ -231,7 +238,7 @@ export function letter5({ host, score, unsubUrl }) {
       `If you want to watch it properly rather than remember to check: the full report puts you beside three rivals and re-checks you every week for a month. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
     ],
     bodyHtml: [
-      said(score) ? `<p>Two weeks ago <strong>${host}</strong> scored <strong>${score} of 100</strong>.</p>` : `<p>Two weeks ago we checked <strong>${host}</strong>.</p>`,
+      said(score) ? `<p>Two weeks ago <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>.</p>` : `<p>Two weeks ago we checked <strong>${site(host)}</strong>.</p>`,
       '<p>Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.</p>',
       btn(`${SITE}/ai-visibility/`, 'Run the check again →'),
       '<p>If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.</p>',
@@ -244,7 +251,7 @@ export function letter5({ host, score, unsubUrl }) {
 /** Письмо 6. Месяц спустя, и на этом цепочка заканчивается. */
 export function letter6({ host, unsubUrl }) {
   return wrap({
-    subject: `${host}, a month later`,
+    subject: `${site(host)}, a month later`,
     bodyText: [
       'This is the last of these. After it we stop writing unless you run another check or ask us something.',
       '',
