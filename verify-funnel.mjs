@@ -24,6 +24,9 @@ const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith('--'));
 if (!url) { console.error('нужен адрес: node verify-funnel.mjs https://example.com'); process.exit(2); }
 const langs = args.includes('--both') ? ['en', 'ru'] : [args.includes('--ru') ? 'ru' : 'en'];
+/** Столько ждём один прогон. Без потолка проверка на медленном чужом сайте висит молча, и
+ *  «ещё идёт» становится неотличимо от «повисло». */
+const BUDGET_MS = Number((args.find((a) => a.startsWith('--budget=')) || '--budget=25').slice(9)) * 60 * 1000;
 
 let bad = 0;
 for (const lang of langs) {
@@ -40,10 +43,13 @@ for (const lang of langs) {
   // если они разошлись.
   const r = spawnSync(process.execPath, [resolve(ROOT, 'report-run.mjs'),
     `--url=${url}`, '--email=info+test@oper-stack.com', `--lang=${lang}`, '--tier=free',
-    `--visibility=${packed}`, '--dry-run'], { encoding: 'utf8', env: process.env });
+    `--visibility=${packed}`, '--dry-run'], { encoding: 'utf8', env: process.env, timeout: BUDGET_MS });
   const line = (r.stdout || '').split('\n').find((l) => l.includes('[сухой прогон] балл:'));
   console.log(`  ${line ? line.trim() : 'очередь не напечатала строку сверки'}`);
-  if (r.status !== 0 || !line || !line.includes('✓')) {
+  if (r.error && r.error.code === 'ETIMEDOUT') {
+    bad++;
+    console.error(`  очередь не уложилась в ${BUDGET_MS / 60000} минут: это не расхождение, это медленный сайт`);
+  } else if (r.status !== 0 || !line || !line.includes('✓')) {
     bad++;
     console.error((r.stderr || '').trim().split('\n').slice(-3).join('\n'));
   }
