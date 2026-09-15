@@ -107,6 +107,11 @@ jobs:
           GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
           GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
           KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
+          # Скрытый тариф за 19: без него первое английское письмо уходит без блока со скидкой,
+          # хотя письмо 2 через сутки говорит «осталось четыре часа на цену 19». Русскому письму
+          # переменная не нужна, там скидку подтверждает подпись, поэтому пропажа была видна
+          # только на английской стороне.
+          WHOP_CHECKOUT_RIVALS_19: ${{ vars.WHOP_CHECKOUT_RIVALS_19 }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
       # Уборка идёт и здесь, а не только в задании про почту. Очередь просыпается по каждой
