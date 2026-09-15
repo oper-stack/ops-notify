@@ -272,7 +272,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
   const headText = head
     ? [`${head.label}: ${head.score} ${ru ? 'из 100' : 'of 100'} (${head.grade}).`,
        head.note, '',
-       ...head.areas.map((x) => `  ${x.label}: ${x.score} / ${x.max}`), '']
+       ...head.areas.map((x) => `  ${x.label}: ${x.score === null ? head.notMeasured : `${x.score} / ${x.max}`}`), '']
     : [];
   const text = free
     ? [greeting, '',
@@ -322,7 +322,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
           // Ради этой цифры человек и оставлял почту. Она же стоит на первой странице отчёта,
           // и под ней те же пять областей, которые в сумме её дают.
           ...(head ? [headline({ host, ...head })] : []),
-          ...(head && head.areas.length ? [areaTable(head.areas)] : []),
+          ...(head && head.areas.length ? [areaTable(head.areas, head.notMeasured)] : []),
           note(t.measuredFree),
           ...(firstTask
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.firstFixHead}</p>`,
@@ -348,7 +348,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
       : [
           par(greeting),
           ...(head ? [headline({ host, ...head })] : []),
-          ...(head && head.areas.length ? [areaTable(head.areas)] : []),
+          ...(head && head.areas.length ? [areaTable(head.areas, head.notMeasured)] : []),
           ...(head ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${head.secondMeasure}</p>`] : []),
           scoreTable(areaRows, lang),
           ...(head ? [note(head.secondMeasureFoot)] : []),
