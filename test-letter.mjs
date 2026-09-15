@@ -133,5 +133,35 @@ for (const lang of ['ru', 'en']) {
   }
 }
 
+// ---- сплошной перебор: ни одно сочетание пустых полей не ломает предложение
+//
+// Столбцы в таблице правятся руками и могут сдвинуться. До 15.09.2026 пустой адрес давал
+// «Вчера null набрал 46 из 100» в холодном письме. Перебираем адрес и балл во всех состояниях,
+// в каких они приходят из таблицы, по всем письмам и обоим языкам.
+{
+  const EN2 = await import('./sequence.mjs');
+  const RU2 = await import('./sequence.ru.mjs');
+  const hosts = ['example.com', '', ' ', undefined, null];
+  const scores = ['46', '0', '', ' ', undefined, null, 'не измерено'];
+  let combos = 0; let broken = 0;
+  for (const [lang, M] of [['en', EN2], ['ru', RU2]]) {
+    for (const [name, make] of [['2', M.letter2], ['3', M.letter3], ['4', M.letter4Owner], ['5', M.letter5], ['6', M.letter6]]) {
+      for (const host of hosts) {
+        for (const score of scores) {
+          combos += 1;
+          const o = make({ host, score, offerUrl: 'https://oper-stack.com/api/offer/?t=x', unsubUrl: 'https://oper-stack.com/api/unsubscribe/?t=x' });
+          const all = `${o.subject}\n${o.text}\n${o.html}`;
+          if (/undefined|null|NaN/.test(all)) { broken += 1; console.error(`  ${lang}/${name}: мусор в тексте при host=${JSON.stringify(host)}, score=${JSON.stringify(score)}`); continue; }
+          if (/(набрал|scored)\s+(из|of) 100/.test(all)) { broken += 1; console.error(`  ${lang}/${name}: дыра вместо балла`); continue; }
+          if (/(Вчера|Yesterday)\s{2,}/.test(all) || />\s*<\/strong>/.test(all)) { broken += 1; console.error(`  ${lang}/${name}: дыра вместо адреса`); continue; }
+          if (!/example\.com|ваш сайт|your site/.test(all)) { broken += 1; console.error(`  ${lang}/${name}: сайт не назван никак`); }
+        }
+      }
+    }
+  }
+  ok(`${combos} сочетаний пустых полей, ни одного сломанного предложения`, broken === 0);
+  ok('перебрано не меньше полусотни сочетаний', combos >= 50);
+}
+
 if (bad) { console.error(`\n${bad} тест(ов) упало`); process.exit(1); }
 console.log('\nписьмо и отчёт несут один балл');
