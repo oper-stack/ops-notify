@@ -27,7 +27,7 @@
  *      WHOP_CHECKOUT_RIVALS_19 (необязательно; нет значения, значит письмо 2 не уходит),
  *      TG_TOKEN, TG_CHAT_ID (необязательно).
  */
-import { createHmac, createSign } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { letter2, letter3, letter4Agency, letter4Owner, letter5, letter6 } from './sequence.mjs';
 import * as RU from './sequence.ru.mjs';
@@ -43,27 +43,7 @@ const SITE = 'https://oper-stack.com';
 
 /* ------------------------------ таблица ------------------------------ */
 
-let cachedToken = null;
-async function sheetsToken() {
-  if (cachedToken && Date.now() < cachedToken.until) return cachedToken.value;
-  const iss = env('SHEETS_SA_EMAIL');
-  const key = env('SHEETS_SA_KEY').replace(/\\n/g, '\n');
-  if (!iss || !key) throw new Error('нет SHEETS_SA_EMAIL или SHEETS_SA_KEY');
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const head = b64({ alg: 'RS256', typ: 'JWT' });
-  const claim = b64({ iss, scope: 'https://www.googleapis.com/auth/spreadsheets', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
-  const sig = createSign('RSA-SHA256').update(`${head}.${claim}`).end().sign(key, 'base64url');
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${head}.${claim}.${sig}`,
-  });
-  if (!res.ok) throw new Error(`Google не выдал токен: ${res.status}`);
-  const body = await res.json();
-  cachedToken = { value: body.access_token, until: Date.now() + ((body.expires_in ?? 3600) - 60) * 1000 };
-  return cachedToken.value;
-}
+import { sheetsToken } from './sheets.mjs';
 
 async function readRows() {
   const token = await sheetsToken();

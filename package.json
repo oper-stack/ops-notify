@@ -9,8 +9,10 @@
     "mail:dry": "node notify-mail.mjs --dry-run",
     "digest": "node digest.mjs",
     "digest:dry": "node digest.mjs --dry-run",
-    "test": "node test-letter.mjs && node test-queue.mjs",
-    "verify:funnel": "node verify-funnel.mjs"
+    "test": "node test-letter.mjs && node test-queue.mjs && node test-watch.mjs",
+    "verify:funnel": "node verify-funnel.mjs",
+    "watch": "node watch-run.mjs",
+    "watch:dry": "node watch-run.mjs --dry-run"
   },
   "engines": {
     "node": ">=20"

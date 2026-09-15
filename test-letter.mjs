@@ -80,7 +80,7 @@ for (const lang of ['ru', 'en']) {
 {
   const { text, html } = letter('ru', true, null);
   ok('без балла письмо не называет цифру', !/из 100/.test(text) && !/из 100/.test(html));
-  ok('и всё равно доходит целиком', text.includes('Отчёт во вложении') && html.includes('OperStack'));
+  ok('и всё равно доходит целиком', text.includes('Вот правка') && html.includes('OperStack'));
 }
 
 // Старая заявка принесла одну цифру без разбивки: письмо всё равно должно быть честным.
@@ -105,6 +105,16 @@ for (const lang of ['ru', 'en']) {
   ok('и в разметке', /не измерялось<\/td>/.test(html));
   ok('ни null, ни undefined в письмо не попали', !/null|undefined/.test(text) && !/null|undefined/.test(html));
   ok('остальные области напечатаны числом', /Is there something to quote: 20 \/ 25/.test(text));
+}
+
+// ---- бесплатное письмо: без PDF, и тема про правку, а не про отчёт
+{
+  const { subject, text } = letter('ru', true);
+  ok('тема бесплатного письма про правку', /^Ваша первая правка: /.test(subject));
+  ok('бесплатное письмо не обещает вложение', !/во вложении|attached/i.test(text));
+  const en = letter('en', true);
+  ok('английская тема про правку', /^Your first fix: /.test(en.subject));
+  ok('платное письмо по-прежнему называется отчётом', /^Отчёт OperStack: /.test(letter('ru', false).subject));
 }
 
 // ---- цепочка писем после бесплатной проверки

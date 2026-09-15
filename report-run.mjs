@@ -143,9 +143,9 @@ function buildComparison(mine, rivals, lang) {
 
 const COPY = {
   en: {
-    subject: (host) => `Your OperStack report: ${host}`,
+    subject: (host, free) => (free ? `Your first fix: ${host}` : `Your OperStack report: ${host}`),
     greeting: 'Your report is attached as a PDF.',
-    greetingFree: 'Your report is attached as a PDF: everything this check found on your site, area by area. The one fix that moves your score most is in this email, below. Open the report, then come back here.',
+    greetingFree: 'Here is the one fix that moves your score most, written so you can hand it to whoever runs your site. Your score and its five areas are what you saw on the page; they are repeated below so this letter stands on its own.',
     measuredFree: 'It is measured, not written by a person: every number comes from your live pages, and where something could not be measured the report says so and why.',
     firstFixHead: 'The fix that moves your score most',
     firstFixBody: 'Copy it whole and hand it to whoever looks after your site, or paste it into ChatGPT, Claude or Cursor. Keep the Now and How to check lines: without them nobody knows where to start or when it is done.',
@@ -174,10 +174,10 @@ const COPY = {
     sign: 'OperStack · info@oper-stack.com',
   },
   ru: {
-    subject: (host) => `Отчёт OperStack: ${host}`,
+    subject: (host, free) => (free ? `Ваша первая правка: ${host}` : `Отчёт OperStack: ${host}`),
     greeting: 'Отчёт во вложении, PDF.',
-    greetingFree: 'Отчёт во вложении, PDF: всё, что проверка нашла на вашем сайте, по областям. Правка, которая сильнее всего двигает балл, ниже в этом письме. Откройте отчёт, посмотрите и возвращайтесь сюда.',
-    measuredFree: 'Отчёт измерен, а не написан человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
+    greetingFree: 'Вот правка, которая сильнее всего двигает балл, написанная так, чтобы её можно было отдать тому, кто ведёт сайт. Балл и пять областей те же, что вы видели на странице; они повторены ниже, чтобы письмо читалось само по себе.',
+    measuredFree: 'Всё это измерено, а не написано человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
     firstFixHead: 'Правка, которая сильнее всего двигает балл',
     firstFixBody: 'Скопируйте её целиком и отдайте тому, кто ведёт вам сайт, или вставьте в ChatGPT, Claude или Cursor. Строки «Сейчас» и «Как проверить» не выбрасывайте: без них исполнитель не поймёт, откуда начинать и чем закончить.',
     moreHead: 'Хотите все проблемы, а не только первую?',
@@ -311,7 +311,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
     site: lang,
     unsubUrl,
     preheader: free
-      ? (ru ? 'Отчёт во вложении: что нашли и с чего начинать' : 'Your report is attached: what we found and where to start')
+      ? (ru ? 'Ваша первая правка и балл сайта' : 'Your first fix and your site score')
       : (ru ? 'Отчёт и список задач во вложении' : 'Your report and task list are attached'),
     heading,
     blocks: free
@@ -361,7 +361,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
   });
   // Пометки «free» в теме больше нет: это единственное письмо, которое человек получает
   // после проверки, и слово «бесплатный» в теме обесценивает то, что внутри.
-  return { subject: t.subject(host), text, html };
+  return { subject: t.subject(host, free), text, html };
 }
 
 async function send({ to, subject, text, html, attachments = [], unsubUrl = null }) {
@@ -481,7 +481,9 @@ async function main() {
      * а уходил один. Функция для него в @operstack/audit есть и экспортируется, её просто никто
      * не звал. В бесплатную ступень задачи не входят: иначе за 9 платить не за что.
      */
-    const attachments = [{ filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' }];
+    // Бесплатная ступень с 15.09.2026 без PDF: он первая платная вещь. За почту уходит балл и
+    // одна правка словами, а форму остального человек видел на странице размытым списком.
+    const attachments = FREE ? [] : [{ filename: path.basename(result.pdf), content: pdf, contentType: 'application/pdf' }];
     if (!FREE) {
       const tasks = renderAgentPrompts(audit, { lang: LANG });
       if (tasks && tasks.trim()) {
@@ -504,7 +506,7 @@ async function main() {
       const three = { движок: VISIBILITY?.score ?? null, отчёт: printed ? Number(printed[1]) : null, письмо: head ? head.score : null };
       const same = new Set(Object.values(three).filter((v) => v !== null)).size <= 1;
       log(`  [сухой прогон] балл: движок ${three.движок ?? '—'} | отчёт ${three.отчёт ?? '—'} | письмо ${three.письмо ?? '—'} ${same ? '✓ сходится' : '✗ РАСХОЖДЕНИЕ'}`);
-      log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено`);
+      log(`  [сухой прогон] письмо «${letter.subject}» для ${EMAIL} не отправлено, вложений: ${attachments.length}`);
       log('\n' + letter.text);
       if (!same) process.exitCode = 1;
       return;
@@ -512,6 +514,24 @@ async function main() {
 
     await send({ to: EMAIL, ...letter, attachments, unsubUrl });
     log(`  письмо отправлено: ${EMAIL} (вложений: ${attachments.length})`);
+
+    /*
+     * Ступень «Против конкурентов» продолжается четырьмя срезами раз в неделю. Запись в таблицу
+     * наблюдения делается здесь, в момент отправки отчёта, с баллами на этот день: от них потом
+     * считается разница. Не записали, значит человек не получит того, за что заплатил, поэтому
+     * провал записи это тревога в Telegram, а не тихий лог.
+     */
+    if (TIER === '29') {
+      try {
+        const { register } = await import('./watch-run.mjs');
+        const baseline = { site: head ? head.score : null, rivals: Object.fromEntries(rivals.map((r) => [String(r.meta?.host || '').replace(/^www\./, ''), Number.isFinite(r.overall?.score) ? r.overall.score : null])) };
+        await register({ kind: 'rivals-weekly', email: EMAIL, url: site, lang: LANG, rivals: rivals.map((r) => r.meta?.url || '').filter(Boolean), baseline });
+        log('  наблюдение: записано, первый срез через неделю');
+      } catch (e) {
+        log(`  наблюдение НЕ записано: ${e.message}`);
+        await notifyTelegram(`⚠️ Отчёт за 29 для ${EMAIL} ушёл, но запись на еженедельные срезы не удалась: ${e.message}. Записать руками: node watch-run.mjs --register --kind=rivals-weekly --email=${EMAIL} --url=${site} --lang=${LANG}`);
+      }
+    }
     await notifyTelegram(`📄 ${FREE ? 'Бесплатный отчёт' : 'Отчёт'} отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
   } finally {
     await rm(work, { recursive: true, force: true });
