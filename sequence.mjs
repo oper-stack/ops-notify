@@ -110,7 +110,7 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
     bodyText: [
       said(score) ? `Yesterday ${site(host)} scored ${score} of 100, and we sent you everything the check found.` : `Yesterday we checked ${site(host)} and sent you everything the check found.`,
       '',
-      'The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.',
+      'The full report is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.',
       '',
       'It is 29 USD. For four more hours it is 19, and then this link goes back to 29 and does not come back.',
       '',
@@ -120,7 +120,7 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
     ],
     bodyHtml: [
       said(score) ? `<p>Yesterday <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>` : `<p>Yesterday we checked <strong>${site(host)}</strong> and sent you everything the check found.</p>`,
-      '<p>The full report is the next step: the same measurement on up to three rivals in one table beside yours, and a re-check of your site every week for a month, so you can see what your fixes actually moved.</p>',
+      '<p>The full report is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.</p>',
       '<p>It is 29 USD. <strong>For four more hours it is 19</strong>, and then this link goes back to 29 and does not come back.</p>',
       btn(offerUrl, 'Take the full report at 19 USD →'),
       '<p style="color:#666;font-size:14px">For scale: an agency that watches AI visibility for you charges 2,000 to 15,000 USD a month, on a contract you have to end. This is once, for a month, and there is nothing to cancel.</p>',
