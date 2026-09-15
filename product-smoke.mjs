@@ -45,6 +45,30 @@ async function checkAuditPackage() {
   return `${checks} проверок, ${scored} областей с оценкой${/wrote/.test(stdout) ? '' : ''}`;
 }
 
+/**
+ * Настоящий браузер: работает ли стадия, которой мы меряем слепоту к скриптам.
+ *
+ * Зачем отдельно. Обычная проверка идёт с `--no-rendered`, то есть браузер в ней не участвует.
+ * А именно эта стадия 14.09.2026 оказалась сломанной сразу двумя способами: она могла висеть
+ * бесконечно, и она могла принять собственную страницу ошибки Chrome за версию сайта покупателя
+ * и написать в платном отчёте выдуманную находку. Оба случая молчаливые: отчёт всё равно уходит,
+ * просто с неправдой или с опозданием на сорок минут.
+ *
+ * Здесь мы открываем в браузере свою же главную страницу и требуем узнать в ней свой текст.
+ * Пусто, ошибка или молчание значит, что стадия не работает, и об этом надо узнать от себя, а не
+ * от покупателя.
+ */
+async function checkRealBrowser() {
+  const { renderedDom, isBrowserErrorPage } = await import('@operstack/audit/rendered');
+  const started = Date.now();
+  const dom = await renderedDom(SITE, { timeoutMs: 45000 });
+  const took = ((Date.now() - started) / 1000).toFixed(1);
+  if (!dom) throw new Error(`браузер не отдал разметку за ${took} с: проверка слепоты к скриптам сейчас ничего не меряет`);
+  if (isBrowserErrorPage(dom)) throw new Error('браузер отдал свою страницу ошибки вместо сайта: находки по скриптам были бы выдуманными');
+  if (!/OperStack/i.test(dom)) throw new Error('в разметке нет нашего же названия: браузер открыл не то');
+  return `${(dom.length / 1024).toFixed(0)} КБ разметки за ${took} с`;
+}
+
 /** Актор в Apify: настоящий прогон на своём сайте. */
 async function checkActor() {
   const token = env('APIFY_TOKEN');
@@ -88,6 +112,7 @@ async function checkCheckoutPages() {
 const main = async () => {
   const jobs = [
     ['пакет аудита', checkAuditPackage],
+    ['настоящий браузер', checkRealBrowser],
     ['актор видимости', checkActor],
     ['страницы оплаты', checkCheckoutPages],
   ];
