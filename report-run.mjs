@@ -23,7 +23,7 @@ import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { AREAS_RU, collect, draftNarrative, overallSummary, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
+import { AREAS_RU, collect, draftNarrative, firstFixParts, overallSummary, render, renderAgentPrompts, stillEmpty } from '@operstack/audit';
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { areaTable, button, buttonLoud, emailShell, headline, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
@@ -281,7 +281,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
        ...(firstTask
          ? [t.firstFixHead, '', t.firstFixBody, '',
             `${lang === 'ru' ? 'Сейчас' : 'Now'}: ${firstTask.now}`, '',
-            `${lang === 'ru' ? 'Что сделать' : 'What to do'}: ${firstTask.task}`, '',
+            `${lang === 'ru' ? 'Задача' : 'Task'}: ${firstTask.task}`, '',
             `${lang === 'ru' ? 'Как проверить' : 'How to check'}: ${firstTask.verify}`, '',
             firstTask.rule, '']
          : []),
@@ -446,8 +446,21 @@ async function main() {
     // короткая, и её нужно копировать, а из вложения это лишнее движение.
     let firstTask = null;
     if (FREE) {
-      const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
-      firstTask = one && one.trim() ? oneTaskParts(one, LANG) : null;
+      /*
+       * Та же правка, что человек видел на экране, теми же словами и подписями.
+       *
+       * Раньше письмо собирало её из своего прогона аудита, и получалось два разных замера в
+       * одном письме: строка балла говорила «прочитано 3 страницы», а правка внутри «на 5 страниц
+       * выборки». Теперь правка берётся из того же результата проверки, что уехал на страницу,
+       * через firstFixParts из пакета. Если находки нет сопоставления, письмо честно падает на
+       * старый путь, а не остаётся без правки.
+       */
+      const fromPage = VISIBILITY && Array.isArray(VISIBILITY.fixes) ? firstFixParts(VISIBILITY.fixes[0], { lang: LANG }) : null;
+      if (fromPage) firstTask = fromPage;
+      else {
+        const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
+        firstTask = one && one.trim() ? oneTaskParts(one, LANG) : null;
+      }
       log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
     }
 
