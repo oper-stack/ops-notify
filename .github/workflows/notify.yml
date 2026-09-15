@@ -18,11 +18,10 @@ on:
     - cron: '*/5 * * * *'    # очередь отчётов: подстраховка раз в пять минут. Обычно её будит сам сайт, сразу по заявке
     - cron: '0 10 * * *'     # цепочка писем после бесплатной проверки, 10:00 UTC
     - cron: '30 10 * * *'    # наблюдение: еженедельные срезы за 29 и перепроверка через 90 дней, 10:30 UTC
-    - cron: '17 * * * *'     # радар веток, раз в час, все источники бесплатные
   workflow_dispatch:
     inputs:
       job:
-        description: 'mail, digest, smoke, report, sequence, watch or radar'
+        description: 'mail, digest, smoke, report, sequence or watch'
         default: 'mail'
       # Цепочка пишет живым людям. Проверять её «запустим и посмотрим» нельзя: письмо уже ушло.
       # Сухой прогон показывает, кому и какое письмо ушло бы, и не отправляет ничего.
@@ -188,36 +187,6 @@ jobs:
           GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
           GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
           KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
-          SHEETS_SA_EMAIL: ${{ secrets.SHEETS_SA_EMAIL }}
-          SHEETS_SA_KEY: ${{ secrets.SHEETS_SA_KEY }}
-          FREE_CHECKS_SHEET_ID: ${{ secrets.FREE_CHECKS_SHEET_ID }}
-          TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-
-  radar:
-    # Радар веток: где прямо сейчас спрашивают то, на что у нас есть ответ. Ничего не публикует,
-    # только присылает в Telegram ссылку и черновик ответа, отвечает человек руками.
-    #
-    # Раз в час, и это ничего не стоит: все четыре источника открытые и не просят ни ключа, ни
-    # аккаунта. Платный Threads остался в коде, но включается только вручную, через RADAR_SOURCE.
-    if: >-
-      github.event.schedule == '17 * * * *'
-      || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'radar')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: operstack-radar
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --omit=dev
-      - run: node radar-run.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry) && '--dry-run' || '' }}
-        env:
-          RADAR_SOURCE: free
           SHEETS_SA_EMAIL: ${{ secrets.SHEETS_SA_EMAIL }}
           SHEETS_SA_KEY: ${{ secrets.SHEETS_SA_KEY }}
           FREE_CHECKS_SHEET_ID: ${{ secrets.FREE_CHECKS_SHEET_ID }}
