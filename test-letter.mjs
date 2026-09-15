@@ -114,7 +114,10 @@ for (const lang of ['ru', 'en']) {
   ok('бесплатное письмо не обещает вложение', !/во вложении|attached/i.test(text));
   const en = letter('en', true);
   ok('английская тема про правку', /^Your first fix: /.test(en.subject));
-  ok('платное письмо по-прежнему называется отчётом', /^Отчёт OperStack: /.test(letter('ru', false).subject));
+  // Товар называется одинаково везде: карточка, письмо сайта после оплаты, письмо очереди.
+  ok('платное письмо называет товар списком правок', /^Список правок OperStack: /.test(letter('ru', false).subject));
+  ok('английское платное письмо тоже', /^Your OperStack fix list: /.test(letter('en', false).subject));
+  ok('словом «отчёт» товар больше не называется', !/Отчёт OperStack|OperStack report/.test(letter('ru', false).subject + letter('en', false).subject));
 }
 
 // ---- цепочка писем после бесплатной проверки
