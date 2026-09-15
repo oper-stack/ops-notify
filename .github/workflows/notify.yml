@@ -74,6 +74,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      # Проверке настоящего браузера нужен сам пакет, а не только его команда: она открывает
+      # страницу тем же кодом, которым её открывает отчёт. Остальные проверки по-прежнему берут
+      # пакет из сети через npx, то есть ровно так, как его получает покупатель.
+      - run: npm ci --omit=dev
       - run: node product-smoke.mjs
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
