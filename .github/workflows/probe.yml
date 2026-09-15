@@ -1,5 +1,7 @@
 name: probe-sources
-on: { workflow_dispatch: {} }
+on:
+  push:
+    branches: [cc/radar-free]
 jobs:
   probe:
     runs-on: ubuntu-latest
