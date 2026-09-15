@@ -97,7 +97,7 @@ const NOISE = /free trial|discount|promo code|giveaway|dm me|link in bio|crypto|
 const HIRING = /hiring|for hire|available for work|ищу (смм|smm|специалист|подрядчик|таргет)|мои услуги/i;
 
 /** Ссылки, которые не являются «его сайтом»: платформы, соцсети, хранилища кода. */
-const NOT_A_SITE = /(^|\.)(mastodon\.\w+|fosstodon\.org|hachyderm\.io|lemmy\.\w+|programming\.dev|news\.ycombinator\.com|habr\.com|github\.com|gitlab\.com|x\.com|twitter\.com|t\.co|threads\.(net|com)|bsky\.app|youtube\.com|youtu\.be|medium\.com|linkedin\.com|reddit\.com|producthunt\.com|figma\.com|notion\.so|substack\.com|devpost\.com|itch\.io|gumroad\.com|patreon\.com|ko-fi\.com|apps\.apple\.com|play\.google\.com|npmjs\.com|codeberg\.org|sourcehut\.org|sr\.ht)$/i;
+const NOT_A_SITE = /(^|\.)(mastodon\.\w+|fosstodon\.org|hachyderm\.io|lemmy\.\w+|programming\.dev|news\.ycombinator\.com|habr\.com|github\.com|gitlab\.com|x\.com|twitter\.com|t\.co|threads\.(net|com)|bsky\.app|youtube\.com|youtu\.be|medium\.com|linkedin\.com|reddit\.com|producthunt\.com|figma\.com|notion\.so|substack\.com|devpost\.com|itch\.io|gumroad\.com|patreon\.com|ko-fi\.com|apps\.apple\.com|play\.google\.com|npmjs\.com|codeberg\.org|sourcehut\.org|sr\.ht|gitconnected\.com|dev\.to|hashnode\.dev|blogspot\.com|wordpress\.com|tumblr\.com|join-lemmy\.org|semrush\.com|ahrefs\.com)$/i;
 
 const clean = (s) => String(s || '')
   .replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' ').replace(/<[^>]*>/g, ' ')
@@ -354,11 +354,20 @@ async function main() {
 
   const byKey = new Map();
   for (const p of found) { const k = dedupeKey(p); if (!byKey.has(k)) byKey.set(k, p); }
-  const fresh = [...byKey.values()]
+  // И ещё раз по автору и началу текста: один человек нередко повторяет мысль двумя постами.
+  const byAuthor = new Map();
+  for (const p of byKey.values()) {
+    const k = `${p.source}:${p.author}:${(p.text || '').slice(0, 60).toLowerCase()}`;
+    if (!byAuthor.has(k)) byAuthor.set(k, p);
+  }
+  const fresh = [...byAuthor.values()]
     .filter((p) => p.id && !seen.has(p.id) && !seen.has(dedupeKey(p)))
     .map((p) => ({ ...p, kind: classify(p) }))
     .filter((p) => p.kind)
-    .map((p) => ({ ...p, site: siteFrom(p.text, p.links, p), _score: score(p) + (p.kind === 'shipped' ? 3 : 0) }))
+    // Сайт достаём только для свежих запусков. У поста «спрашивает по нашей теме» ссылка
+    // обычно чужая: новость, документация, инструмент конкурента. Называть её «его сайтом»
+    // значит врать в сводке, поэтому там поле остаётся пустым.
+    .map((p) => ({ ...p, site: p.kind === 'shipped' ? siteFrom(p.text, p.links, p) : '', _score: score(p) + (p.kind === 'shipped' ? 3 : 0) }))
     .sort((a, b) => b._score - a._score);
 
   log(`после отсева осталось: ${fresh.length} из ${found.length}`);
