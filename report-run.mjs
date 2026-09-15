@@ -159,8 +159,7 @@ const COPY = {
     offerPoints: [
       'Everything in the 9 USD report, on your own site',
       'The same measurement on up to three rivals, in one table beside yours',
-      'Four weekly re-checks of your site, by email',
-      'You see what your fixes actually moved, and what they did not',
+      'You see, in one table, exactly where each rival is ahead of you and where you are ahead',
       'One payment, no subscription, nothing to cancel',
     ],
     offerCta: 'Take it at 19 USD',
@@ -191,8 +190,7 @@ const COPY = {
     offerPoints: [
       'Всё из отчёта за 800 ₽, по вашему сайту',
       'Те же замеры по трём конкурентам, в одной таблице рядом с вами',
-      'Четыре перепроверки вашего сайта, раз в неделю письмом',
-      'Видно, что сдвинулось от ваших правок, а что нет',
+      'В одной таблице видно, где именно каждый конкурент вас обходит, а где обходите вы',
       'Разовая оплата, подписки не остаётся, отменять нечего',
     ],
     offerCta: 'Забрать за 1 500 ₽',

@@ -235,14 +235,14 @@ export function letter5({ host, score, unsubUrl }) {
       '',
       'If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.',
       '',
-      `If you want to watch it properly rather than remember to check: the full report puts you beside three rivals and re-checks you every week for a month. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
+      `If you want to watch it properly rather than remember to check: the full report puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
     ],
     bodyHtml: [
       said(score) ? `<p>Two weeks ago <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>.</p>` : `<p>Two weeks ago we checked <strong>${site(host)}</strong>.</p>`,
       '<p>Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.</p>',
       btn(`${SITE}/ai-visibility/`, 'Run the check again →'),
       '<p>If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.</p>',
-      `<p style="color:#666;font-size:14px">If you want to watch it properly rather than remember to check: <a href="${SITE}/products/rival-watch/">the full report</a> puts you beside three rivals and re-checks you every week for a month. 29 USD, no subscription.</p>`,
+      `<p style="color:#666;font-size:14px">If you want to watch it properly rather than remember to check: <a href="${SITE}/products/rival-watch/">the full report</a> puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription.</p>`,
     ],
     unsubUrl,
   });
