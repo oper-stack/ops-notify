@@ -153,8 +153,8 @@ async function sendFailureNote({ email, url, lang, kind = 'report', sites = [] }
         subject: `Не получилось собрать отчёт по ${host}`,
         heading: ['Не получилось собрать отчёт', host],
         lead: `Вы оставили почту, чтобы получить отчёт по <strong>${host}</strong>, и мы обещали письмо. Отчёта не будет, и честнее сказать об этом, чем молчать.`,
-        why: 'Сборщику не удалось открыть ни одной страницы вашего сайта. Чаще всего так бывает, когда сайт отвечает слишком долго, отдаёт очень тяжёлые страницы или закрыт для обращений извне. Проверка на странице читает одну страницу и поэтому прошла, а отчёт читает пять и до них не добрался.',
-        what: 'Напишите нам на info@oper-stack.com, и мы прогоним его руками. Адрес сайта указывать не нужно, он у нас есть.',
+        why: 'Сборщику не удалось открыть ни одной страницы вашего сайта. Так бывает, когда сайт отвечает слишком долго, отдаёт очень тяжёлые страницы или стоит за защитой от роботов: Cloudflare, Qrator, DDoS-Guard. Защита разворачивает незнакомых клиентов, и наш сборщик для неё незнакомый.',
+        what: 'Если защита есть, впустите нас: добавьте в её белый список клиентов, у которых в строке User-Agent есть слово OperStack. Это две минуты в настройках. Потом напишите нам на info@oper-stack.com, и мы соберём отчёт заново, бесплатно. Адрес сайта указывать не нужно, он у нас есть.',
         again: 'Проверка остаётся бесплатной и открытой, её можно прогнать ещё раз в любой момент.',
         cta: 'Открыть проверку',
       }
@@ -162,8 +162,8 @@ async function sendFailureNote({ email, url, lang, kind = 'report', sites = [] }
         subject: `We could not build the report for ${host}`,
         heading: ['We could not build the report for', host],
         lead: `You left your email for a report on <strong>${host}</strong>, and we promised one. There will be no report, and saying so is better than silence.`,
-        why: 'Our collector could not open a single page of your site. Usually that means the site answers too slowly, serves very heavy pages, or is closed to outside requests. The check on the page reads one page and went through; the report reads five and never got to them.',
-        what: 'Write to info@oper-stack.com and we will run it by hand. No need to give the address again, we have it.',
+        why: 'Our collector could not open a single page of your site. That happens when the site answers too slowly, serves very heavy pages, or sits behind bot protection: Cloudflare, Qrator, DDoS-Guard. Protection turns away unknown clients, and our collector is one.',
+        what: 'If there is protection, let us in: add clients whose User-Agent contains the word OperStack to its allowlist. Two minutes in the settings. Then write to info@oper-stack.com and we will build the report again, free of charge. No need to give the address again, we have it.',
         again: 'The check itself stays free and open, and you can run it again whenever you like.',
         cta: 'Open the check',
       };
