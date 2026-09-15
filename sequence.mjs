@@ -171,10 +171,13 @@ export function letter3({ host, unsubUrl }) {
 
 /** Письмо 4 для агентства: у этой почты несколько разных сайтов. */
 export function letter4Agency({ sites, unsubUrl }) {
+  // The count can arrive empty, and the subject used to read "You checked null sites with us".
+  const n = Number(sites);
+  const many = Number.isFinite(n) && n > 0 ? String(n) : 'several';
   return wrap({
-    subject: `You checked ${sites} sites with us. Here is what that looks like under your logo`,
+    subject: `You checked ${many} sites with us. Here is what that looks like under your logo`,
     bodyText: [
-      `You have run ${sites} different sites through our check. So you are not auditing your own site. You are auditing someone else’s, and billing for it.`,
+      `You have run ${many} different sites through our check. So you are not auditing your own site. You are auditing someone else’s, and billing for it.`,
       '',
       'A technical audit is quoted at 2,000 to 7,500 USD and an AI visibility audit at 1,000 to 5,000. You know that better than we do, because it is your invoice. You also know that most of the work behind it is measuring, and measuring is the part you would rather not do by hand.',
       '',
@@ -187,7 +190,7 @@ export function letter4Agency({ sites, unsubUrl }) {
       ]),
     ],
     bodyHtml: [
-      `<p>You have run <strong>${sites} different sites</strong> through our check. So you are not auditing your own site. You are auditing someone else’s, and billing for it.</p>`,
+      `<p>You have run <strong>${many} different sites</strong> through our check. So you are not auditing your own site. You are auditing someone else’s, and billing for it.</p>`,
       '<p>A technical audit is quoted at 2,000 to 7,500 USD and an AI visibility audit at 1,000 to 5,000. You know that better than we do, because it is your invoice. You also know that most of the work behind it is measuring, and measuring is the part you would rather not do by hand.</p>',
       '<p>The agency plan produces the measured report with <strong>your logo on the cover</strong>, your colour through the document and your agency named as the author. No cap on sites, reports or clients, and no share of what you charge them. <strong>39 USD a month.</strong></p>',
       btn(`${SITE}/products/agency/`, 'See the agency plan →'),
