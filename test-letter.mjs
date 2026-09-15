@@ -190,5 +190,22 @@ for (const lang of ['ru', 'en']) {
   }
 }
 
+// ---- письма цепочки: ни одно поле не может вылезти в текст словом null
+// 15.09.2026 в теме письма агентству стояло «Вы проверили у нас null сайтов»: число сайтов
+// приходит из таблицы и бывает пустым. Здесь перебираются все письма и все пустые значения.
+{
+  const RU = await import('./sequence.ru.mjs');
+  const EN = await import('./sequence.mjs');
+  const names = ['letter2', 'letter3', 'letter4Agency', 'letter4Owner', 'letter5', 'letter6'];
+  let combos = 0; const broken = [];
+  for (const [tag, m] of [['ru', RU], ['en', EN]]) for (const name of names)
+    for (const host of ['x.ru', '', null, undefined]) for (const score of [46, 0, null, '', undefined]) for (const sites of [3, 1, 0, null, undefined, NaN]) {
+      combos++;
+      const L = m[name]({ host, score, sites, offerUrl: 'https://oper-stack.ru/api/offer/?t=X', unsubUrl: 'https://oper-stack.ru/api/unsubscribe/?t=Y' });
+      if (/null|undefined|NaN|\$\{|\[object/.test(L.subject + L.text + L.html)) broken.push(`${tag}/${name} host=${JSON.stringify(host)} score=${JSON.stringify(score)} sites=${JSON.stringify(sites)}`);
+    }
+  ok(`${combos} сочетаний пустых полей во всех письмах цепочки без мусора${broken.length ? ': ' + broken.slice(0, 3).join('; ') : ''}`, broken.length === 0);
+}
+
 if (bad) { console.error(`\n${bad} тест(ов) упало`); process.exit(1); }
 console.log('\nписьмо и отчёт несут один балл');
