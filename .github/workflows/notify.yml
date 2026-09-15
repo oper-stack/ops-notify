@@ -22,6 +22,12 @@ on:
       job:
         description: 'mail, digest, smoke, report or sequence'
         default: 'mail'
+      # Цепочка пишет живым людям. Проверять её «запустим и посмотрим» нельзя: письмо уже ушло.
+      # Сухой прогон показывает, кому и какое письмо ушло бы, и не отправляет ничего.
+      dry:
+        description: 'сухой прогон: показать, что ушло бы, и ничего не отправлять'
+        type: boolean
+        default: false
 
 jobs:
   mail:
@@ -140,7 +146,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --omit=dev
-      - run: node sequence-run.mjs
+      - run: node sequence-run.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry) && '--dry-run' || '' }}
         env:
           GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
           GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
