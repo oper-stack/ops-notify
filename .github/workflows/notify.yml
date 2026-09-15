@@ -17,10 +17,11 @@ on:
     - cron: '0 6 * * *'      # продукты: прогон того, что продаём, на своём сайте, 06:00 UTC
     - cron: '*/5 * * * *'    # очередь отчётов: подстраховка раз в пять минут. Обычно её будит сам сайт, сразу по заявке
     - cron: '0 10 * * *'     # цепочка писем после бесплатной проверки, 10:00 UTC
+    - cron: '30 10 * * *'    # наблюдение: еженедельные срезы за 29 и перепроверка через 90 дней, 10:30 UTC
   workflow_dispatch:
     inputs:
       job:
-        description: 'mail, digest, smoke, report or sequence'
+        description: 'mail, digest, smoke, report, sequence or watch'
         default: 'mail'
       # Цепочка пишет живым людям. Проверять её «запустим и посмотрим» нельзя: письмо уже ушло.
       # Сухой прогон показывает, кому и какое письмо ушло бы, и не отправляет ничего.
@@ -28,6 +29,9 @@ on:
         description: 'сухой прогон: показать, что ушло бы, и ничего не отправлять'
         type: boolean
         default: false
+      register:
+        description: 'наблюдение: записать строку (JSON: kind, email, url, lang, rivals, registeredAt)'
+        default: ''
 
 jobs:
   mail:
@@ -113,6 +117,9 @@ jobs:
           GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
           GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
           KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
+          SHEETS_SA_EMAIL: ${{ secrets.SHEETS_SA_EMAIL }}
+          SHEETS_SA_KEY: ${{ secrets.SHEETS_SA_KEY }}
+          FREE_CHECKS_SHEET_ID: ${{ secrets.FREE_CHECKS_SHEET_ID }}
           # Скрытый тариф за 19: без него первое английское письмо уходит без блока со скидкой,
           # хотя письмо 2 через сутки говорит «осталось четыре часа на цену 19». Русскому письму
           # переменная не нужна, там скидку подтверждает подпись, поэтому пропажа была видна
@@ -155,5 +162,33 @@ jobs:
           SHEETS_SA_KEY: ${{ secrets.SHEETS_SA_KEY }}
           FREE_CHECKS_SHEET_ID: ${{ secrets.FREE_CHECKS_SHEET_ID }}
           WHOP_CHECKOUT_RIVALS_19: ${{ vars.WHOP_CHECKOUT_RIVALS_19 }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+
+  watch:
+    # Наблюдение: четыре еженедельных среза для ступени «Против конкурентов» и перепроверка через
+    # 90 дней для аудита. Память это лист «Наблюдение» в той же таблице, что у цепочки писем.
+    if: github.event.schedule == '30 10 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'watch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: operstack-watch
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - run: node watch-run.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry) && '--dry-run' || '' }}
+        env:
+          WATCH_REGISTER: ${{ github.event_name == 'workflow_dispatch' && inputs.register || '' }}
+          GOOGLE_USER: ${{ secrets.GOOGLE_USER }}
+          GOOGLE_APP_PASSWORD: ${{ secrets.GOOGLE_APP_PASSWORD }}
+          KIT_DOWNLOAD_SECRET: ${{ secrets.KIT_DOWNLOAD_SECRET }}
+          SHEETS_SA_EMAIL: ${{ secrets.SHEETS_SA_EMAIL }}
+          SHEETS_SA_KEY: ${{ secrets.SHEETS_SA_KEY }}
+          FREE_CHECKS_SHEET_ID: ${{ secrets.FREE_CHECKS_SHEET_ID }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
