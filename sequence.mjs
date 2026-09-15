@@ -1,7 +1,8 @@
 /**
  * Тексты писем после бесплатного отчёта.
  *
- * Простым языком: человек оставил почту, получил список находок и PDF. Дальше мы пишем ему
+ * Простым языком: человек оставил почту, получил первую правку письмом (PDF стал первой платной
+ * вещью 15.09.2026, бесплатная ступень его больше не шлёт). Дальше мы пишем ему
  * ещё несколько раз. Каждое письмо должно нести пользу само по себе, даже если человек
  * ничего не купит, иначе это просто спам с логотипом.
  *
@@ -82,7 +83,7 @@ function wrap({ subject, bodyText, bodyHtml, unsubUrl, heading, preheader }) {
 const btn = (href, label) => button(href, label);
 
 /**
- * Письмо 2. Сутки на полный отчёт за 19 вместо 29.
+ * Письмо 2. Сутки на сравнение с конкурентами за 19 вместо 29.
  *
  * Уходит только если скрытый тариф за 19 действительно заведён: обещать цену, которой нет,
  * нельзя. Пока тарифа нет, письмо просто не отправляется, и человек сразу получает третье.
@@ -110,7 +111,7 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
     bodyText: [
       said(score) ? `Yesterday ${site(host)} scored ${score} of 100, and we sent you everything the check found.` : `Yesterday we checked ${site(host)} and sent you everything the check found.`,
       '',
-      'The full report is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.',
+      'The rival comparison is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.',
       '',
       'It is 29 USD. For four more hours it is 19, and then this link goes back to 29 and does not come back.',
       '',
@@ -120,9 +121,9 @@ export function letter2({ host, score, offerUrl, unsubUrl }) {
     ],
     bodyHtml: [
       said(score) ? `<p>Yesterday <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>, and we sent you everything the check found.</p>` : `<p>Yesterday we checked <strong>${site(host)}</strong> and sent you everything the check found.</p>`,
-      '<p>The full report is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.</p>',
+      '<p>The rival comparison is the next step: the same measurement on up to three rivals in one table beside yours. You see who gets named instead of you and exactly where they are ahead.</p>',
       '<p>It is 29 USD. <strong>For four more hours it is 19</strong>, and then this link goes back to 29 and does not come back.</p>',
-      btn(offerUrl, 'Take the full report at 19 USD →'),
+      btn(offerUrl, 'Take the comparison at 19 USD →'),
       '<p style="color:#666;font-size:14px">For scale: an agency that watches AI visibility for you charges 2,000 to 15,000 USD a month, on a contract you have to end. This is once, for a month, and there is nothing to cancel.</p>',
     ],
     unsubUrl,
@@ -235,14 +236,14 @@ export function letter5({ host, score, unsubUrl }) {
       '',
       'If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.',
       '',
-      `If you want to watch it properly rather than remember to check: the full report puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
+      `If you want to watch it properly rather than remember to check: the rival comparison puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription: ${SITE}/products/rival-watch/`,
     ],
     bodyHtml: [
       said(score) ? `<p>Two weeks ago <strong>${site(host)}</strong> scored <strong>${score} of 100</strong>.</p>` : `<p>Two weeks ago we checked <strong>${site(host)}</strong>.</p>`,
       '<p>Run the check again and see. It takes ten seconds and costs nothing, and it is the only honest way to know whether anything you changed actually landed.</p>',
       btn(`${SITE}/ai-visibility/`, 'Run the check again →'),
       '<p>If the number has not moved, that is worth knowing too. Scores do not drift upward on their own: robots.txt, llms.txt, schema and opening paragraphs stay exactly as they were until somebody changes them.</p>',
-      `<p style="color:#666;font-size:14px">If you want to watch it properly rather than remember to check: <a href="${SITE}/products/rival-watch/">the full report</a> puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription.</p>`,
+      `<p style="color:#666;font-size:14px">If you want to watch it properly rather than remember to check: <a href="${SITE}/products/rival-watch/">the rival comparison</a> puts you beside three rivals in one table, measured by the same code. 29 USD, no subscription.</p>`,
     ],
     unsubUrl,
   });

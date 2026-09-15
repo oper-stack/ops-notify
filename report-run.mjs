@@ -143,8 +143,8 @@ function buildComparison(mine, rivals, lang) {
 
 const COPY = {
   en: {
-    subject: (host, free) => (free ? `Your first fix: ${host}` : `Your OperStack report: ${host}`),
-    greeting: 'Your report is attached as a PDF.',
+    subject: (host, free, rivals) => (free ? `Your first fix: ${host}` : rivals ? `Your rival comparison: ${host}` : `Your OperStack fix list: ${host}`),
+    greeting: 'Your fix list is attached, with the measurement behind it as a PDF.',
     greetingFree: 'Here is the one fix that moves your score most, written so you can hand it to whoever runs your site. Your score and its five areas are what you saw on the page; they are repeated below so this letter stands on its own.',
     measuredFree: 'It is measured, not written by a person: every number comes from your live pages, and where something could not be measured the report says so and why.',
     firstFixHead: 'The fix that moves your score most',
@@ -157,7 +157,7 @@ const COPY = {
     offerEyebrow: '24 hours only',
     offerTitle: 'You and three rivals, watched for a month',
     offerPoints: [
-      'Everything in the 9 USD report, on your own site',
+      'Everything in the 9 USD fix list, on your own site',
       'The same measurement on up to three rivals, in one table beside yours',
       'You see, in one table, exactly where each rival is ahead of you and where you are ahead',
       'One payment, no subscription, nothing to cancel',
@@ -175,8 +175,8 @@ const COPY = {
     sign: 'OperStack · info@oper-stack.com',
   },
   ru: {
-    subject: (host, free) => (free ? `Ваша первая правка: ${host}` : `Отчёт OperStack: ${host}`),
-    greeting: 'Отчёт во вложении, PDF.',
+    subject: (host, free, rivals) => (free ? `Ваша первая правка: ${host}` : rivals ? `Сравнение с конкурентами: ${host}` : `Список правок OperStack: ${host}`),
+    greeting: 'Список правок во вложении, рядом замер, из которого он собран, в PDF.',
     greetingFree: 'Вот правка, которая сильнее всего двигает балл, написанная так, чтобы её можно было отдать тому, кто ведёт сайт. Балл и пять областей те же, что вы видели на странице; они повторены ниже, чтобы письмо читалось само по себе.',
     measuredFree: 'Всё это измерено, а не написано человеком: каждая цифра снята с ваших живых страниц, а там, где измерить не вышло, так и написано и сказано почему.',
     firstFixHead: 'Правка, которая сильнее всего двигает балл',
@@ -189,7 +189,7 @@ const COPY = {
     offerEyebrow: 'Только сутки',
     offerTitle: 'Вы и три конкурента, месяц наблюдения',
     offerPoints: [
-      'Всё из отчёта за 800 ₽, по вашему сайту',
+      'Всё из списка правок за 800 ₽, по вашему сайту',
       'Те же замеры по трём конкурентам, в одной таблице рядом с вами',
       'В одной таблице видно, где именно каждый конкурент вас обходит, а где обходите вы',
       'Разовая оплата, подписки не остаётся, отменять нечего',
@@ -303,8 +303,8 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
        t.whatIsIt, '', nextStep, '', t.sign].join('\n');
   // Заголовок двумя строками: домен не должен рваться посередине.
   const heading = ru
-    ? ['Ваш отчёт по сайту', host]
-    : ['Your report for', host];
+    ? [comparison ? 'Вы и ваши конкуренты' : 'Ваш список правок', host]
+    : [comparison ? 'You and your rivals' : 'Your fix list for', host];
   const areaRows = Object.entries(scores || {}).map(([area, v]) => [
     ru ? (AREAS_RU[area] || area) : area,
     typeof v === 'number' ? v : null,
@@ -314,7 +314,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
     unsubUrl,
     preheader: free
       ? (ru ? 'Ваша первая правка и балл сайта' : 'Your first fix and your site score')
-      : (ru ? 'Отчёт и список задач во вложении' : 'Your report and task list are attached'),
+      : (ru ? 'Список правок и замер во вложении' : 'Your fix list and the measurement are attached'),
     heading,
     blocks: free
       ? [
@@ -364,7 +364,7 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
   });
   // Пометки «free» в теме больше нет: это единственное письмо, которое человек получает
   // после проверки, и слово «бесплатный» в теме обесценивает то, что внутри.
-  return { subject: t.subject(host, free), text, html };
+  return { subject: t.subject(host, free, Boolean(comparison)), text, html };
 }
 
 async function send({ to, subject, text, html, attachments = [], unsubUrl = null }) {
