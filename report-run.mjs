@@ -259,7 +259,15 @@ function offerUrlFor(email, lang) {
   return `${site}/api/offer/?t=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
-export function buildLetter({ host, lang, scores, comparison, free = false, head = null, offerUrl = null, unsubUrl = null, firstTask = null }) {
+/*
+ * Что несёт бесплатное письмо, с 16.09.2026.
+ *
+ * Раньше оно несло ту же самую правку, которую человек уже прочитал на странице целиком. То есть
+ * мы просили почту за то, что только что отдали. Теперь письмо несёт ВТОРУЮ правку и названия
+ * всех остальных находок. Как чинить каждую из остальных, остаётся в списке правок за деньги:
+ * эту границу двигать нельзя, иначе бесплатное письмо съедает платный товар.
+ */
+export function buildLetter({ host, lang, scores, comparison, free = false, head = null, offerUrl = null, unsubUrl = null, firstTask = null, secondTask = null, restNames = [] }) {
   const t = COPY[lang];
   const ru = lang === 'ru';
   const greeting = free ? t.greetingFree : t.greeting;
@@ -285,6 +293,22 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
             `${lang === 'ru' ? 'Задача' : 'Task'}: ${firstTask.task}`, '',
             `${lang === 'ru' ? 'Как проверить' : 'How to check'}: ${firstTask.verify}`, '',
             firstTask.rule, '']
+         : []),
+       ...(secondTask
+         ? [lang === 'ru' ? 'Вторая по важности правка' : 'The second fix by weight', '',
+            `${lang === 'ru' ? 'Сейчас' : 'Now'}: ${secondTask.now}`, '',
+            `${lang === 'ru' ? 'Задача' : 'Task'}: ${secondTask.task}`, '',
+            `${lang === 'ru' ? 'Как проверить' : 'How to check'}: ${secondTask.verify}`, '',
+            secondTask.rule, '']
+         : []),
+       ...(restNames.length
+         ? [lang === 'ru' ? `Что ещё нашлось на сайте, всего ${restNames.length}:` : `What else the check found, ${restNames.length} in all:`,
+            ...restNames.map((x) => `  - ${x}`),
+            '',
+            lang === 'ru'
+              ? 'Что именно поменять по каждой из них и как проверить, расписано в списке правок по всему сайту.'
+              : 'What to change for each of them, and how to check it, is written out in the full site fix list.',
+            '']
          : []),
        `${t.moreHead} ${t.moreBody}`,
        `${t.moreCta}: ${site}/${lang === 'ru' ? 'produkty' : 'products'}/site-report/`,
@@ -329,6 +353,17 @@ export function buildLetter({ host, lang, scores, comparison, free = false, head
             ? [`<p style="margin:22px 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#14181C">${t.firstFixHead}</p>`,
                par(t.firstFixBody),
                taskBlock(firstTask, lang)]
+            : []),
+          ...(secondTask
+            ? [par(`<strong>${lang === 'ru' ? 'Вторая по важности правка' : 'The second fix by weight'}</strong>`),
+               taskBlock(secondTask, lang)]
+            : []),
+          ...(restNames.length
+            ? [par(`<strong>${lang === 'ru' ? `Что ещё нашлось на сайте, всего ${restNames.length}` : `What else the check found, ${restNames.length} in all`}</strong>`),
+               `<ul style="margin:8px 0 14px;padding-left:20px;font-size:15px;line-height:1.6">${restNames.map((x) => `<li>${String(x).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</li>`).join('')}</ul>`,
+               note(lang === 'ru'
+                 ? 'Что именно поменять по каждой из них и как проверить, расписано в списке правок по всему сайту.'
+                 : 'What to change for each of them, and how to check it, is written out in the full site fix list.')]
             : []),
           '<hr style="border:0;border-top:1px solid #CFC8BA;margin:24px 0">',
           par(`<strong>${t.moreHead}</strong> ${t.moreBody}`),
@@ -446,6 +481,8 @@ async function main() {
     // Одна задача на бесплатной ступени уезжает в тело письма, а не вторым файлом: она
     // короткая, и её нужно копировать, а из вложения это лишнее движение.
     let firstTask = null;
+    let secondTask = null;
+    let restNames = [];
     if (FREE) {
       /*
        * Та же правка, что человек видел на экране, теми же словами и подписями.
@@ -462,7 +499,24 @@ async function main() {
         const one = renderAgentPrompts(audit, { lang: LANG, limit: 1 });
         firstTask = one && one.trim() ? oneTaskParts(one, LANG) : null;
       }
+      /*
+       * Вторая правка и список остальных. Берём из того же результата, что уехал на страницу,
+       * иначе письмо и экран снова разойдутся. Названия остальных находок это их собственный
+       * текст, укороченный: полный текст с объяснением живёт в платном списке.
+       */
+      if (VISIBILITY && Array.isArray(VISIBILITY.fixes) && VISIBILITY.fixes[1]) {
+        secondTask = firstFixParts(VISIBILITY.fixes[1], { lang: LANG });
+      }
+      if (VISIBILITY && Array.isArray(VISIBILITY.areas)) {
+        const all = VISIBILITY.areas.flatMap((a) => (a.findings || []).filter((f) => f.level === 'fail' || f.level === 'warn'));
+        const shown = new Set([VISIBILITY.fixes?.[0]?.id, VISIBILITY.fixes?.[1]?.id].filter(Boolean));
+        restNames = all
+          .filter((f) => !shown.has(f.id))
+          .map((f) => String(f.text || '').split(/(?<=[.!?])\s/)[0].trim())
+          .filter(Boolean);
+      }
       log(firstTask ? '  первая задача разобрана в письмо' : '  первой задачи нет: проваленных проверок не нашлось');
+      log(`  вторая задача: ${secondTask ? 'есть' : 'нет'}, остальных находок: ${restNames.length}`);
     }
 
     /**
@@ -481,7 +535,7 @@ async function main() {
 
     const unsubUrl = FREE ? unsubUrlFor(EMAIL, LANG) : null;
     const letter = buildLetter({
-      host, lang: LANG, scores: audit.scores, comparison, free: FREE,
+      host, lang: LANG, scores: audit.scores, comparison, free: FREE, secondTask, restNames,
       head,
       offerUrl: FREE ? offerUrlFor(EMAIL, LANG) : null,
       unsubUrl,
