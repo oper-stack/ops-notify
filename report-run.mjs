@@ -27,6 +27,7 @@ import { AREAS_RU, collect, draftNarrative, firstFixParts, overallSummary, rende
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { areaTable, button, buttonLoud, emailShell, headline, note, offerCard, p as par, scoreTable, taskBlock } from './email-shell.mjs';
+import { isOwnTest } from './own-test.mjs';
 
 const args = process.argv.slice(2);
 const val = (p, d = '') => (args.find((a) => a.startsWith(p)) || `${p}${d}`).slice(p.length);
@@ -548,7 +549,9 @@ async function main() {
         await notifyTelegram(`⚠️ Отчёт за 29 для ${EMAIL} ушёл, но запись на еженедельные срезы не удалась: ${e.message}. Записать руками: node watch-run.mjs --register --kind=rivals-weekly --email=${EMAIL} --url=${site} --lang=${LANG}`);
       }
     }
-    await notifyTelegram(`📄 ${FREE ? 'Бесплатный отчёт' : 'Отчёт'} отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
+    // Успех молчит, если отчёт ушёл на наш собственный проверочный адрес: это прогон, не продажа.
+    if (isOwnTest(EMAIL)) log(`  в Telegram не пишем: ${EMAIL} это наш проверочный адрес`);
+    else await notifyTelegram(`📄 ${FREE ? 'Бесплатный отчёт' : 'Отчёт'} отправлен: ${host}${rivals.length ? ` и ${rivals.length} конкурент(ов)` : ''} → ${EMAIL}`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }

@@ -31,6 +31,7 @@ import { createHmac } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { letter2, letter3, letter4Agency, letter4Owner, letter5, letter6 } from './sequence.mjs';
 import * as RU from './sequence.ru.mjs';
+import { isOwnTest } from './own-test.mjs';
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry-run');
@@ -203,6 +204,8 @@ async function main() {
 
   const now = Date.now();
   let sentCount = 0;
+  // Отдельно считаем живых людей: письмо на свой проверочный адрес это не событие для Telegram.
+  let realCount = 0;
   for (const p of people.values()) {
     if (sentCount >= LIMIT) { log(`достигнут предел ${LIMIT} писем за прогон`); break; }
     if (p.unsubscribed) continue;
@@ -226,6 +229,7 @@ async function main() {
       await send({ to: p.email, ...mail, lang: p.lang });
       await markSent(p.rows, n);
       sentCount += 1;
+      if (!isOwnTest(p.email)) realCount += 1;
       log(`${p.email}: письмо ${n} отправлено («${mail.subject}»)`);
     } catch (e) {
       log(`${p.email}: письмо ${n} НЕ отправлено: ${e.message}`);
@@ -234,7 +238,7 @@ async function main() {
   }
 
   log(`готово: людей в таблице ${people.size}, отправлено ${sentCount}`);
-  if (sentCount) await telegram(`✉️ Цепочка: отправлено ${sentCount} писем`);
+  if (realCount) await telegram(`✉️ Цепочка: отправлено ${realCount} писем`);
 }
 
 main().catch(async (e) => {
