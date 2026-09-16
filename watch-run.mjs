@@ -33,6 +33,7 @@ import nodemailer from 'nodemailer';
 import { VISIBILITY_DEFAULTS, checkVisibility } from '@operstack/audit';
 import { appendRows, ensureSheet, readRows, updateCells } from './sheets.mjs';
 import { buildWatchLetter } from './watch-letter.mjs';
+import { isOwnTest } from './own-test.mjs';
 
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
@@ -144,6 +145,8 @@ async function main() {
   log(`записей в наблюдении: ${rows.length}`);
 
   let sentCount = 0;
+  // Отдельно живые люди: срез на свой проверочный адрес в Telegram не идёт.
+  let realCount = 0;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const rowNo = i + 2;
@@ -181,6 +184,7 @@ async function main() {
         { range: `${SHEET}!J${rowNo}`, values: [[JSON.stringify(last)]] },
       ]);
       sentCount += 1;
+      if (!isOwnTest(email)) realCount += 1;
       log(`  отправлено: «${letter.subject}»`);
     } catch (e) {
       log(`  НЕ отправлено: ${e.message}`);
@@ -188,7 +192,7 @@ async function main() {
     }
   }
   log(`готово: отправлено ${sentCount}`);
-  if (sentCount) await telegram(`📈 Наблюдение: отправлено ${sentCount} срез(ов)`);
+  if (realCount) await telegram(`📈 Наблюдение: отправлено ${realCount} срез(ов)`);
 }
 
 const RUN_AS_PROGRAM = process.argv[1] && new URL(`file://${process.argv[1]}`).pathname === new URL(import.meta.url).pathname;
